@@ -1,0 +1,26 @@
+{
+  "title_lines": ["GAME", "TITLE"],
+  "subtitle": "",
+  "provider_text": "",
+  "output_filename": "my_game.png",
+  "character_height_ratio": 0.74,
+  "font_path": "C:/Windows/Fonts/arialbd.ttf",
+
+  "title_image": {
+    "enabled": true,
+    "path": "title.png",
+    "max_width_ratio": 0.7,
+    "scale": 1.0
+  },
+
+  "provider_logo": {
+    "enabled": true,
+    "path": "provider.png",
+    "position": "bottom_right",
+    "max_width_ratio": 0.25,
+    "max_height_ratio": 0.12,
+    "margin": 18,
+    "opacity": 1.0,
+    "invert_for_dark": true
+  }
+}

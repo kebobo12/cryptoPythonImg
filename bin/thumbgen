@@ -1,0 +1,21 @@
+#!/usr/bin/env python3
+"""
+Entry point script for the thumbgen CLI.
+Run on Windows using:
+    python bin/thumbgen <command>
+"""
+
+import sys
+import os
+
+# -------------------------------------------
+# IMPORTANT FIX FOR WINDOWS
+# Add project root folder to PYTHONPATH
+# -------------------------------------------
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, BASE_DIR)
+
+from thumbgen.cli import app
+
+if __name__ == "__main__":
+    app()

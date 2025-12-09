@@ -1,0 +1,16 @@
+{
+  "title_lines": ["GAME", "NAME"],
+  "character_height_ratio": 0.74,
+  "font_path": "C:/Windows/Fonts/arialbd.ttf",
+
+  "title_image": {
+    "enabled": true,
+    "path": "title.png"
+  },
+
+  "provider_logo": {
+    "enabled": true,
+    "path": "provider.png",
+    "position": "bottom_right"
+  }
+}
