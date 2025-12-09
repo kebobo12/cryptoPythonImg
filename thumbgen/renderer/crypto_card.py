@@ -45,21 +45,45 @@ def crypto_blur_background(bg: Image.Image) -> Image.Image:
 
 
 # -------------------------------------------------------------
-# Multi-line centered text helper
+# Dynamic text sizing and measurement
 # -------------------------------------------------------------
-def draw_centered_lines(canvas, lines, y_start, font_ratio, fill, font_path=None):
-    draw = ImageDraw.Draw(canvas)
-    current_y = y_start
+def measure_text_block(lines, font_ratio, font_path, line_gap_ratio=0.01):
+    """
+    Measure total height and max width of a text block.
+    Returns (total_height, max_width, [(line, font, bbox), ...])
+    """
+    draw = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+    size = int(CANVAS_H * font_ratio)
+    font = ImageFont.truetype(font_path or DEFAULT_FONT_PATH, size)
 
-    for line in lines:
-        size = int(CANVAS_H * font_ratio)
-        font = ImageFont.truetype(font_path or DEFAULT_FONT_PATH, size)
+    total_height = 0
+    max_width = 0
+    line_data = []
 
-        # Use textbbox instead of deprecated textsize
+    for i, line in enumerate(lines):
         bbox = draw.textbbox((0, 0), line, font=font)
         w = bbox[2] - bbox[0]
         h = bbox[3] - bbox[1]
 
+        max_width = max(max_width, w)
+        total_height += h
+
+        if i < len(lines) - 1:  # Add gap between lines
+            total_height += int(CANVAS_H * line_gap_ratio)
+
+        line_data.append((line, font, bbox, w, h))
+
+    return total_height, max_width, line_data
+
+
+def draw_text_block(canvas, line_data, y_start, fill):
+    """
+    Draw a block of text with pre-calculated font and dimensions.
+    """
+    draw = ImageDraw.Draw(canvas)
+    current_y = y_start
+
+    for line, font, _bbox, w, h in line_data:
         x = (CANVAS_W - w) // 2
         draw.text((x, current_y), line, font=font, fill=fill)
         current_y += h + int(CANVAS_H * 0.01)
@@ -178,27 +202,83 @@ def render_crypto_card(background, character, title_lines, provider, font_path=N
 
     canvas = Image.alpha_composite(canvas, dark_overlay)
 
-    # 4) TITLE TEXT - 15% of image height, positioned lower
-    text_y = int(CANVAS_H * 0.68)  # Lower position
+    # 4) DYNAMIC TEXT SIZING - Calculate dimensions and adjust to fit
+    # Available space: from 68% to 95% of canvas (blur band area)
+    text_area_start = int(CANVAS_H * 0.68)
+    text_area_end = int(CANVAS_H * 0.95)
+    available_height = text_area_end - text_area_start
+    available_width = int(CANVAS_W * 0.95)  # 95% width max
 
-    draw_centered_lines(
-        canvas,
-        title_lines,
-        y_start=text_y,
-        font_ratio=0.15,  # 15% of total image height
-        fill=(255, 255, 255, 255),
-        font_path=font_path
+    # Starting font ratios
+    title_font_ratio = 0.15
+    provider_font_ratio = 0.048
+    min_gap = int(CANVAS_H * 0.02)  # Minimum gap between title and provider
+
+    # Iterate to find sizes that fit
+    max_iterations = 10
+    for iteration in range(max_iterations):
+        # Measure title
+        title_h, title_w, title_data = measure_text_block(
+            title_lines, title_font_ratio, font_path
+        )
+
+        # Measure provider if exists
+        if provider:
+            provider_h, provider_w, provider_data = measure_text_block(
+                [provider], provider_font_ratio, font_path
+            )
+            total_height = title_h + min_gap + provider_h
+            max_text_width = max(title_w, provider_w)
+        else:
+            total_height = title_h
+            max_text_width = title_w
+
+        # Check if fits
+        fits_height = total_height <= available_height
+        fits_width = max_text_width <= available_width
+
+        if fits_height and fits_width:
+            break
+
+        # Reduce font sizes
+        if not fits_width:
+            # Width is the issue - reduce both proportionally
+            scale = available_width / max_text_width
+            title_font_ratio *= scale * 0.95  # 95% to add margin
+            provider_font_ratio *= scale * 0.95
+
+        if not fits_height:
+            # Height is the issue - reduce both proportionally
+            scale = available_height / total_height
+            title_font_ratio *= scale * 0.95
+            provider_font_ratio *= scale * 0.95
+
+        # Safety: don't go too small
+        title_font_ratio = max(title_font_ratio, 0.06)
+        provider_font_ratio = max(provider_font_ratio, 0.03)
+
+    # Final measurement with adjusted sizes
+    title_h, title_w, title_data = measure_text_block(
+        title_lines, title_font_ratio, font_path
     )
 
-    # 5) PROVIDER TEXT - much closer to title with minimal gap
+    # Position title - centered vertically in available space
     if provider:
-        draw_centered_lines(
-            canvas,
-            [provider],
-            y_start=int(CANVAS_H * 0.88),  # Close to title, minimal gap
-            font_ratio=0.048,
-            fill=(255, 255, 255, 235),
-            font_path=font_path
+        provider_h, provider_w, provider_data = measure_text_block(
+            [provider], provider_font_ratio, font_path
         )
+        total_content_height = title_h + min_gap + provider_h
+        # Center the entire block vertically
+        title_y = text_area_start + (available_height - total_content_height) // 2
+        provider_y = title_y + title_h + min_gap
+    else:
+        # Center title alone
+        title_y = text_area_start + (available_height - title_h) // 2
+
+    # 5) RENDER TEXT
+    draw_text_block(canvas, title_data, title_y, (255, 255, 255, 255))
+
+    if provider:
+        draw_text_block(canvas, provider_data, provider_y, (255, 255, 255, 235))
 
     return canvas
