@@ -15,15 +15,15 @@ def render_character(char: Image.Image, height_ratio: float) -> Tuple[Image.Imag
     Scale character much larger + anchor toward bottom.
     """
 
-    # scale character
-    target_h = int(CANVAS_H * height_ratio)
+    # scale character - make it bigger by using a more generous height ratio
+    target_h = int(CANVAS_H * height_ratio * 1.15)  # 15% larger than config
     scale = target_h / char.height
     target_w = int(char.width * scale)
 
     resized = char.resize((target_w, target_h), Image.LANCZOS)
 
-    # anchor character closer to bottom for better composition
-    bottom_anchor = int(CANVAS_H * 0.95)
+    # anchor character so it extends to ~85% bottom, leaving room for title at bottom
+    bottom_anchor = int(CANVAS_H * 0.85)
     y = bottom_anchor - target_h
     x = (CANVAS_W - target_w) // 2
 

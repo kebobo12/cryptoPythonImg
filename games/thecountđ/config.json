@@ -4,7 +4,7 @@
   "provider_text": "Hacksaw Gaming",
   "output_filename": "count.png",
   "character_height_ratio": 0.74,
-  "font_path": "fonts/ama/AMA-Regular.ttf",
+  "font_path": "fonts/ama_squiggly/AMA-Regular.ttf",
   "layout": "crypto",
 
   "title_image": {

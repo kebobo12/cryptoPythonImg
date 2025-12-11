@@ -29,7 +29,6 @@ from .renderer.character import render_character, render_characters
 from .renderer.band import render_bottom_band
 from .renderer.text_block import render_text_block
 from .renderer.title_image import render_title_image
-from .renderer.mask import apply_rounded_corners
 from .provider_logo import render_provider_logo
 from .constants import CANVAS_W, CANVAS_H
 
@@ -58,8 +57,7 @@ def generate_thumbnail(game_dir: Path, output_dir: Path) -> Optional[Path]:
                 character=assets.characters[0],
                 title_lines=cfg.title_lines,
                 provider=cfg.provider_text,
-                font_path=cfg.font_path,
-                band_color=cfg.band_color
+                font_path=cfg.font_path
             )
 
             out_path = output_dir / cfg.output_filename
@@ -144,12 +142,12 @@ def generate_thumbnail(game_dir: Path, output_dir: Path) -> Optional[Path]:
             # Standard side-by-side for 1–2 characters
             rendered_chars = render_characters(assets.characters, cfg.character_height_ratio)
 
-            for i, (char_img, (char_x, char_y)) in enumerate(rendered_chars):
-                if i > 0:  # render all except first
-                    alpha_composite(canvas, char_img, (char_x, char_y))
+            # Render ALL characters first (including character 1)
+            for char_img, (char_x, char_y) in rendered_chars:
+                alpha_composite(canvas, char_img, (char_x, char_y))
 
         # --------------------------------------------------------
-        # TITLE
+        # TITLE - Rendered AFTER characters so it appears on top
         # --------------------------------------------------------
         if cfg.title_image.enabled and assets.title_image:
             canvas = render_title_image(
@@ -170,19 +168,9 @@ def generate_thumbnail(game_dir: Path, output_dir: Path) -> Optional[Path]:
                 font_path=cfg.font_path,
             )
 
-        # Character 1 on top (classic mode only)
-        if len(assets.characters) != 3:
-            rendered_chars = render_characters(assets.characters, cfg.character_height_ratio)
-            if rendered_chars:
-                char_img, (char_x, char_y) = rendered_chars[0]
-                alpha_composite(canvas, char_img, (char_x, char_y))
-
         # Provider logo
         if cfg.provider_logo.enabled and assets.provider_logo:
             canvas = render_provider_logo(canvas, assets.provider_logo, cfg)
-
-        # Rounded corners
-        canvas = apply_rounded_corners(canvas)
 
         # Save
         out_path = output_dir / cfg.output_filename
