@@ -45,6 +45,44 @@ def resolve_dirs(
     return games_root, output_dir
 
 
+def find_all_game_directories(root: Path) -> List[Path]:
+    """
+    Find all game directories in either old or new structure.
+
+    Old structure: games/GameName/config.json
+    New structure: Thumbnails/Provider/GameName/config.json
+
+    Args:
+        root: Root directory to search (either games/ or Thumbnails/)
+
+    Returns:
+        List of Path objects pointing to game directories
+    """
+    game_dirs = []
+
+    if not root.exists():
+        return game_dirs
+
+    # Check if this is the old flat structure
+    # (has config.json files in immediate subdirectories)
+    for item in sorted(root.iterdir()):
+        if item.is_dir():
+            config_file = item / "config.json"
+            if config_file.exists():
+                # Old structure: this is a game directory
+                game_dirs.append(item)
+            else:
+                # New structure: this might be a provider folder
+                # Look for game folders inside
+                for sub_item in sorted(item.iterdir()):
+                    if sub_item.is_dir():
+                        sub_config = sub_item / "config.json"
+                        if sub_config.exists():
+                            game_dirs.append(sub_item)
+
+    return game_dirs
+
+
 # ------------------------------------------------------------
 # Command: thumbgen all
 # ------------------------------------------------------------
@@ -82,15 +120,17 @@ def all(
     success_count = 0
     total_count = 0
 
-    for game_dir in sorted(games_root.iterdir()):
-        if game_dir.is_dir():
-            total_count += 1
-            try:
-                generate_thumbnail(game_dir, output_dir)
-                success_count += 1
-            except ThumbgenError:
-                # Already logged — continue to next game
-                continue
+    # Find all game directories (supports both old and new structure)
+    game_dirs = find_all_game_directories(games_root)
+
+    for game_dir in game_dirs:
+        total_count += 1
+        try:
+            generate_thumbnail(game_dir, output_dir)
+            success_count += 1
+        except ThumbgenError:
+            # Already logged — continue to next game
+            continue
 
     elapsed = time.time() - start_time
     ok(f"\nAll thumbnails processed: {success_count}/{total_count} successful in {elapsed:.2f}s")
@@ -109,11 +149,20 @@ def one(
     """Generate a thumbnail for a single game."""
 
     games_root, output_dir = resolve_dirs(games_root, output_dir)
+
+    # Try old structure first: games/GameName
     game_dir = games_root / game
 
-    if not game_dir.exists():
-        error(f"Game folder not found: {game}")
-        raise typer.Exit(code=1)
+    # If not found, search in new structure: Thumbnails/*/GameName
+    if not game_dir.exists() or not (game_dir / "config.json").exists():
+        all_games = find_all_game_directories(games_root)
+        matching = [g for g in all_games if g.name == game]
+
+        if matching:
+            game_dir = matching[0]
+        else:
+            error(f"Game folder not found: {game}")
+            raise typer.Exit(code=1)
 
     heading(f"Generating thumbnail for: {game}\n")
 

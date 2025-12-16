@@ -34,6 +34,35 @@ from .errors import (
 IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp', '.bmp', '.gif', '.tiff', '.tif']
 
 
+def find_first_image_in_folder(folder: Path) -> Optional[Path]:
+    """
+    Find the first image file in a folder (alphabetically).
+
+    Args:
+        folder: Path to a folder containing images
+
+    Returns:
+        Path to the first image found, or None if folder doesn't exist or has no images.
+
+    Example:
+        find_first_image_in_folder(Path("Thumbnails/Provider/Game/Backgrounds"))
+        # Returns: Path("Thumbnails/Provider/Game/Backgrounds/bg1.png") if that's the first alphabetically
+    """
+    if not folder.exists() or not folder.is_dir():
+        return None
+
+    # Get all image files in the folder, sorted alphabetically
+    image_files = []
+    for ext in IMAGE_EXTENSIONS:
+        image_files.extend(folder.glob(f"*{ext}"))
+
+    if not image_files:
+        return None
+
+    # Sort and return first
+    return sorted(image_files)[0]
+
+
 def find_image_file(base_path: Path) -> Optional[Path]:
     """
     Find an image file with any supported extension.
@@ -98,8 +127,17 @@ def load_image(path: Path, required: bool = True) -> Optional[Image.Image]:
 def load_background(game_dir: Path) -> Image.Image:
     """
     Load background image from the game directory.
+    Supports both old structure (background.png) and new structure (Backgrounds/ folder).
     Auto-detects format: PNG, JPG, JPEG, WEBP, BMP, GIF, TIFF
     """
+    # Try new structure first: Backgrounds/ folder
+    backgrounds_folder = game_dir / "Backgrounds"
+    if backgrounds_folder.exists() and backgrounds_folder.is_dir():
+        found = find_first_image_in_folder(backgrounds_folder)
+        if found:
+            return load_image(found, required=True)
+
+    # Fallback to old structure: background.png
     return load_image(game_dir / "background", required=True)
 
 
@@ -113,8 +151,8 @@ def load_character(game_dir: Path) -> Image.Image:
 
 def load_characters(game_dir: Path) -> list[Image.Image]:
     """
-    Load multiple character images (character1, character2, character3, etc.).
-    Falls back to single character.png if numbered files don't exist.
+    Load multiple character images.
+    Supports both old structure (character1.png, character2.png) and new structure (Character/ folder).
     Auto-detects format: PNG, JPG, JPEG, WEBP, BMP, GIF, TIFF
 
     Returns:
@@ -122,7 +160,25 @@ def load_characters(game_dir: Path) -> list[Image.Image]:
     """
     characters = []
 
-    # Try to load character1, character2, character3...
+    # Try new structure first: Character/ folder
+    character_folder = game_dir / "Character"
+    if character_folder.exists() and character_folder.is_dir():
+        # Get all images from Character folder, sorted alphabetically
+        image_files = []
+        for ext in IMAGE_EXTENSIONS:
+            image_files.extend(character_folder.glob(f"*{ext}"))
+
+        if image_files:
+            # Sort and load up to 3 characters
+            for img_path in sorted(image_files)[:3]:
+                img = load_image(img_path, required=False)
+                if img:
+                    characters.append(img)
+
+            if characters:
+                return characters
+
+    # Fallback to old structure: character1, character2, character3...
     for i in range(1, 4):  # Support up to 3 characters
         char_path = game_dir / f"character{i}"
         img = load_image(char_path, required=False)
@@ -141,6 +197,7 @@ def load_characters(game_dir: Path) -> list[Image.Image]:
 def load_provider_logo(game_dir: Path, cfg: GameConfig) -> Optional[Image.Image]:
     """
     Load provider logo if enabled in configuration.
+    Supports both old structure (provider.png) and new structure (Provider Logo/ folder).
     Auto-detects format: PNG, JPG, JPEG, WEBP, BMP, GIF, TIFF
 
     Args:
@@ -156,7 +213,17 @@ def load_provider_logo(game_dir: Path, cfg: GameConfig) -> Optional[Image.Image]
     if not cfg.provider_logo.enabled:
         return None
 
-    # Try to find the logo with any extension
+    # Try new structure first: Provider Logo/ folder
+    provider_logo_folder = game_dir / "Provider Logo"
+    if provider_logo_folder.exists() and provider_logo_folder.is_dir():
+        found = find_first_image_in_folder(provider_logo_folder)
+        if found:
+            try:
+                return Image.open(found).convert("RGBA")
+            except Exception as exc:
+                raise ProviderLogoError(f"Failed to load provider logo {found}: {exc}") from exc
+
+    # Fallback to old structure: provider.png or path from config
     logo_base = game_dir / Path(cfg.provider_logo.path).stem
     logo_path = find_image_file(logo_base)
 
@@ -176,6 +243,7 @@ def load_provider_logo(game_dir: Path, cfg: GameConfig) -> Optional[Image.Image]
 def load_title_image(game_dir: Path, cfg: GameConfig) -> Optional[Image.Image]:
     """
     Load title image if enabled in configuration.
+    Supports both old structure (title.png) and new structure (Title/ folder).
     Auto-detects format: PNG, JPG, JPEG, WEBP, BMP, GIF, TIFF
 
     Args:
@@ -191,7 +259,18 @@ def load_title_image(game_dir: Path, cfg: GameConfig) -> Optional[Image.Image]:
     if not cfg.title_image.enabled:
         return None
 
-    # Try to find the title image with any extension
+    # Try new structure first: Title/ folder
+    title_folder = game_dir / "Title"
+    if title_folder.exists() and title_folder.is_dir():
+        found = find_first_image_in_folder(title_folder)
+        if found:
+            try:
+                img = Image.open(found)
+                return img.convert("RGBA")
+            except Exception as exc:
+                raise MissingAssetError(f"Failed to load title image {found}: {exc}") from exc
+
+    # Fallback to old structure: title.png or path from config
     title_base = game_dir / Path(cfg.title_image.path).stem
     title_path = find_image_file(title_base)
 
