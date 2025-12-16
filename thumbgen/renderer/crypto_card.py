@@ -143,9 +143,7 @@ def render_crypto_card(background, character, title_lines, provider, font_path=N
     if detected_color is None:
         detected_color = (50, 50, 50)
 
-    # DEBUG: Fixed color for testing
-    r, g, b = (255, 0, 0)  # Bright red for debugging
-    # r, g, b = detected_color  # Uncomment to use detected color
+    r, g, b = detected_color
 
     # ---------------------------------------------------------
     # CURVED BAND WITH GRADIENT FADE (two ellipses)
