@@ -39,7 +39,13 @@ def resolve_dirs(
 
     root = Path.cwd()
 
-    games_root = games_root or (root / "games")
+    # Default to Thumbnails if it exists, otherwise games (backward compatibility)
+    if games_root is None:
+        if (root / "Thumbnails").exists():
+            games_root = root / "Thumbnails"
+        else:
+            games_root = root / "games"
+
     output_dir = output_dir or (root / "output")
 
     return games_root, output_dir
