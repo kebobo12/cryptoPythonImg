@@ -52,12 +52,13 @@ def generate_thumbnail(game_dir: Path, output_dir: Path) -> Optional[Path]:
         if layout == "crypto":
             from .renderer.crypto_card import render_crypto_card
 
+            blur_style = getattr(cfg, "blur_style", "straight")
             canvas = render_crypto_card(
                 background=assets.background,
                 character=assets.characters[0],
                 title_lines=cfg.title_lines,
                 provider=cfg.provider_text,
-                font_path=cfg.font_path
+                font_path=cfg.font_path,
             )
 
             out_path = output_dir / cfg.output_filename

@@ -76,3 +76,16 @@ PROVIDER_FONT_RATIO: float = 0.06
 TEXT_SHADOW_OFFSET: Tuple[int, int] = (2, 2)
 SHADOW_ALPHA: int = 150  # 0–255
 WHITE_ALPHA: int = 255   # 0–255
+
+# -----------------------------------------------------------
+# Provider-specific fonts (crypto layout)
+# -----------------------------------------------------------
+
+# Mapping of provider names to their specific fonts
+# Provider names are normalized (uppercase, no special chars)
+PROVIDER_FONTS = {
+    "HACKSAW GAMING": "fonts/hacksaw/anton.ttf",
+    "HACKSAW": "fonts/hacksaw/anton.ttf",
+    "PRAGMATIC PLAY": "fonts/pragmatic/Gotham Bold/Gotham Bold.otf",
+    "PRAGMATIC": "fonts/pragmatic/Gotham Bold/Gotham Bold.otf",
+}

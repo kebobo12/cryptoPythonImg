@@ -75,6 +75,9 @@ def draw_text_block(canvas, line_data, y_start, fill):
 # -------------------------------------------------------------
 # MAIN RENDERER — Crypto / Pragmatic Play Style
 # -------------------------------------------------------------
+# -------------------------------------------------------------
+# MAIN RENDERER — Crypto / Pragmatic Play Style (WITH FINAL ELLIPSE CLIP)
+# -------------------------------------------------------------
 def render_crypto_card(background, character, title_lines, provider, font_path=None):
 
     canvas = crypto_blur_background(background)
@@ -140,50 +143,65 @@ def render_crypto_card(background, character, title_lines, provider, font_path=N
     if detected_color is None:
         detected_color = (50, 50, 50)
 
-    # ---------------------------------------------------------
-    # INVISIBLE BLUR TRANSITION (crypto style)
-    # ---------------------------------------------------------
-    blur_start = int(CANVAS_H * 0.40)
-    blur_full = int(CANVAS_H * 0.70)
-
-    blur_area = canvas.crop((0, blur_start, CANVAS_W, CANVAS_H))
-    blurred = blur_area.filter(ImageFilter.GaussianBlur(45))
-
-    mask = Image.new("L", (CANVAS_W, CANVAS_H - blur_start))
-    mdraw = ImageDraw.Draw(mask)
-
-    for y in range(CANVAS_H - blur_start):
-        pos = blur_start + y
-
-        if pos < blur_start:
-            alpha = 0
-        elif pos >= blur_full:
-            alpha = 255
-        else:
-            t = (pos - blur_start) / (blur_full - blur_start)
-            t = t ** 3.2
-            alpha = int(255 * t)
-
-        mdraw.line([(0, y), (CANVAS_W, y)], fill=alpha)
-
-    canvas.paste(blurred, (0, blur_start), mask)
+    # DEBUG: Fixed color for testing
+    r, g, b = (255, 0, 0)  # Bright red for debugging
+    # r, g, b = detected_color  # Uncomment to use detected color
 
     # ---------------------------------------------------------
-    # CRYPTO COLOR GLOW (colored atmospheric fade)
+    # CURVED BAND WITH GRADIENT FADE (two ellipses)
     # ---------------------------------------------------------
-    tint = Image.new("RGBA", (CANVAS_W, CANVAS_H), (0, 0, 0, 0))
-    tdraw = ImageDraw.Draw(tint)
 
-    r, g, b = detected_color
-    for y in range(blur_start, CANVAS_H):
-        progress = (y - blur_start) / (CANVAS_H - blur_start)
-        alpha = int(255 * (0.60 * (progress ** 2.2)))
-        tdraw.line([(0, y), (CANVAS_W, y)], fill=(r, g, b, alpha))
+    # Small ellipse (solid core - almost edge to edge, flatter)
+    SMALL_ARC_W = int(CANVAS_W * 1.15)
+    SMALL_ARC_H = int(CANVAS_H * 0.315)  # 10% flatter (0.35 * 0.9)
 
-    canvas = Image.alpha_composite(canvas, tint)
+    small_bbox = (
+        CANVAS_W // 2 - SMALL_ARC_W // 2,
+        int(CANVAS_H - SMALL_ARC_H * 0.7),  # Higher position (was 0.5)
+        CANVAS_W // 2 + SMALL_ARC_W // 2,
+        int(CANVAS_H + SMALL_ARC_H * 1.3)   # Extends further down
+    )
+
+    # Large ellipse (fade extent - reaches title area)
+    LARGE_ARC_W = int(CANVAS_W * 1.1)
+    LARGE_ARC_H = int(CANVAS_H * 0.65)  # Much taller
+
+    large_bbox = (
+        CANVAS_W // 2 - LARGE_ARC_W // 2,
+        int(CANVAS_H - LARGE_ARC_H * 0.5),
+        CANVAS_W // 2 + LARGE_ARC_W // 2,
+        int(CANVAS_H + LARGE_ARC_H * 1.5)
+    )
+
+    # Create gradient overlay
+    gradient_overlay = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
+
+    # Layer 1: Solid core (small ellipse) - more opaque
+    core_layer = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
+    core_draw = ImageDraw.Draw(core_layer)
+    core_draw.pieslice(small_bbox, 180, 360, fill=(r, g, b, 255))
+    core_blurred = core_layer.filter(ImageFilter.GaussianBlur(25))
+    gradient_overlay = Image.alpha_composite(gradient_overlay, core_blurred)
+
+    # Layer 2: Medium fade - more pronounced bleed
+    mid_layer = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
+    mid_draw = ImageDraw.Draw(mid_layer)
+    mid_draw.pieslice(large_bbox, 180, 360, fill=(r, g, b, 220))
+    mid_blurred = mid_layer.filter(ImageFilter.GaussianBlur(80))  # Increased from 50
+    gradient_overlay = Image.alpha_composite(gradient_overlay, mid_blurred)
+
+    # Layer 3: Outer fade - stronger color with bleed
+    outer_layer = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
+    outer_draw = ImageDraw.Draw(outer_layer)
+    outer_draw.pieslice(large_bbox, 180, 360, fill=(r, g, b, 240))  # Increased from 200
+    outer_blurred = outer_layer.filter(ImageFilter.GaussianBlur(140))
+    gradient_overlay = Image.alpha_composite(gradient_overlay, outer_blurred)
+
+    # Composite onto canvas
+    canvas = Image.alpha_composite(canvas, gradient_overlay)
 
     # ---------------------------------------------------------
-    # TEXT BLOCK (title + provider)
+    # TEXT BLOCK (title + provider) - Rendered AFTER curved fade
     # ---------------------------------------------------------
     text_area_start = int(CANVAS_H * 0.68)
     text_area_end = int(CANVAS_H * 0.95)
