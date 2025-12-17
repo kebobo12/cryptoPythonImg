@@ -197,11 +197,14 @@ def load_characters(game_dir: Path) -> list[Image.Image]:
 def load_provider_logo(game_dir: Path, cfg: GameConfig) -> Optional[Image.Image]:
     """
     Load provider logo if enabled in configuration.
-    Supports both old structure (provider.png) and new structure (Provider Logo/ folder).
+
+    New structure: Looks in provider folder (Thumbnails/Provider/Provider Logo/)
+    Old structure: Looks in game folder (game_dir/provider.png)
+
     Auto-detects format: PNG, JPG, JPEG, WEBP, BMP, GIF, TIFF
 
     Args:
-        game_dir: Directory containing provider logo
+        game_dir: Directory containing the game
         cfg: GameConfig object
 
     Returns:
@@ -213,8 +216,12 @@ def load_provider_logo(game_dir: Path, cfg: GameConfig) -> Optional[Image.Image]
     if not cfg.provider_logo.enabled:
         return None
 
-    # Try new structure first: Provider Logo/ folder
-    provider_logo_folder = game_dir / "Provider Logo"
+    # Try new structure first: Provider Logo/ folder at provider level
+    # game_dir = Thumbnails/Provider/Game
+    # provider_dir = Thumbnails/Provider
+    provider_dir = game_dir.parent
+    provider_logo_folder = provider_dir / "Provider Logo"
+
     if provider_logo_folder.exists() and provider_logo_folder.is_dir():
         found = find_first_image_in_folder(provider_logo_folder)
         if found:
@@ -223,7 +230,7 @@ def load_provider_logo(game_dir: Path, cfg: GameConfig) -> Optional[Image.Image]
             except Exception as exc:
                 raise ProviderLogoError(f"Failed to load provider logo {found}: {exc}") from exc
 
-    # Fallback to old structure: provider.png or path from config
+    # Fallback to old structure: provider.png in game folder
     logo_base = game_dir / Path(cfg.provider_logo.path).stem
     logo_path = find_image_file(logo_base)
 

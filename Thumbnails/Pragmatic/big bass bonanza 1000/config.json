@@ -1,21 +1,18 @@
 {
-  "title_lines": ["BIG BASS", "BONANZA 1000"],
   "subtitle": "",
-  "provider_text": "PRAGMATIC PLAY",
+  "provider_text": "Pragmatic",
   "output_filename": "big_bass_bonanza_1000.png",
   "character_height_ratio": 0.74,
   "font_path": "C:/Windows/Fonts/arialbd.ttf",
   "layout": "crypto",
-
   "title_image": {
-    "enabled": false,
+    "enabled": true,
     "path": "title.png",
     "max_width_ratio": 0.7,
     "scale": 1.0
   },
-
   "provider_logo": {
-    "enabled": false,
+    "enabled": true,
     "path": "provider.png",
     "position": "bottom_right",
     "max_width_ratio": 0.25,
@@ -23,5 +20,10 @@
     "margin": 18,
     "opacity": 1.0,
     "invert_for_dark": true
-  }
+  },
+  "band_color": [
+    255,
+    0,
+    208
+  ]
 }

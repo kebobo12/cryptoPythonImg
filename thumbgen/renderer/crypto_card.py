@@ -78,7 +78,7 @@ def draw_text_block(canvas, line_data, y_start, fill):
 # -------------------------------------------------------------
 # MAIN RENDERER — Crypto / Pragmatic Play Style (WITH FINAL ELLIPSE CLIP)
 # -------------------------------------------------------------
-def render_crypto_card(background, character, title_lines, provider, font_path=None):
+def render_crypto_card(background, character, title_lines, provider, font_path=None, band_color=None, provider_logo=None, title_image=None):
 
     canvas = crypto_blur_background(background)
 
@@ -112,38 +112,42 @@ def render_crypto_card(background, character, title_lines, provider, font_path=N
     # ---------------------------------------------------------
     # COLOR DETECTION (main hue)
     # ---------------------------------------------------------
-    quantized = canvas.quantize(colors=32, method=2)
-    quantized_rgb = quantized.convert("RGB")
-    small = quantized_rgb.resize((50, 50), Image.LANCZOS)
+    # Use manual band_color if provided, otherwise auto-detect
+    if band_color is not None:
+        r, g, b = band_color
+    else:
+        quantized = canvas.quantize(colors=32, method=2)
+        quantized_rgb = quantized.convert("RGB")
+        small = quantized_rgb.resize((50, 50), Image.LANCZOS)
 
-    detected_color = None
-    colors = small.getcolors(2500)
+        detected_color = None
+        colors = small.getcolors(2500)
 
-    if colors:
-        colors.sort(key=lambda x: x[0], reverse=True)
+        if colors:
+            colors.sort(key=lambda x: x[0], reverse=True)
 
-        for count, col in colors:
-            if isinstance(col, tuple):
-                r, g, b = col
-                avg = (r + g + b) / 3
-                variance = abs(r - avg) + abs(g - avg) + abs(b - avg)
-
-                if variance > 30 and (r + g + b) > 100:
-                    detected_color = (r, g, b)
-                    break
-
-        if detected_color is None:
-            for _, col in colors:
+            for count, col in colors:
                 if isinstance(col, tuple):
                     r, g, b = col
-                    if 30 < r + g + b < 700:
+                    avg = (r + g + b) / 3
+                    variance = abs(r - avg) + abs(g - avg) + abs(b - avg)
+
+                    if variance > 30 and (r + g + b) > 100:
                         detected_color = (r, g, b)
                         break
 
-    if detected_color is None:
-        detected_color = (50, 50, 50)
+            if detected_color is None:
+                for _, col in colors:
+                    if isinstance(col, tuple):
+                        r, g, b = col
+                        if 30 < r + g + b < 700:
+                            detected_color = (r, g, b)
+                            break
 
-    r, g, b = detected_color
+        if detected_color is None:
+            detected_color = (50, 50, 50)
+
+        r, g, b = detected_color
 
     # ---------------------------------------------------------
     # CURVED BAND WITH GRADIENT FADE (two ellipses)
@@ -198,66 +202,108 @@ def render_crypto_card(background, character, title_lines, provider, font_path=N
     # Composite onto canvas
     canvas = Image.alpha_composite(canvas, gradient_overlay)
 
-    # ---------------------------------------------------------
-    # TEXT BLOCK (title + provider) - Rendered AFTER curved fade
+        # ---------------------------------------------------------
+    # TEXT BLOCK (title + provider) — MATCH BIG BASS OUTPUT
     # ---------------------------------------------------------
     text_area_start = int(CANVAS_H * 0.68)
-    text_area_end = int(CANVAS_H * 0.95)
+    text_area_end   = int(CANVAS_H * 0.95)
     available_height = text_area_end - text_area_start
-    available_width = int(CANVAS_W * 0.85)
+    available_width  = int(CANVAS_W * 0.92)
 
-    title_ratio = 0.15
+    # Initial ratios
+    title_ratio    = 0.15
     provider_ratio = 0.048
     min_gap = int(CANVAS_H * 0.04)
 
+    # ---------------------------------------------------------
+    # 1) TITLE — Fit WIDTH only (same as your Big Bass output)
+    # ---------------------------------------------------------
     for _ in range(10):
         title_h, title_w, title_data = measure_text_block(
             title_lines, title_ratio, font_path
         )
 
-        if provider:
-            prov_h, prov_w, prov_data = measure_text_block(
-                [provider], provider_ratio, font_path
-            )
-            total_h = title_h + min_gap + prov_h
-            max_w = max(title_w, prov_w)
-        else:
-            total_h = title_h
-            max_w = title_w
-
-        if total_h <= available_height and max_w <= available_width:
+        if title_w <= available_width:
             break
 
-        if max_w > available_width:
-            scale = available_width / max_w
-            title_ratio *= scale * 0.85
-            provider_ratio *= scale * 0.85
+        scale = (available_width / title_w) * 0.92
+        title_ratio *= scale
 
-        if total_h > available_height:
-            scale = available_height / total_h
-            title_ratio *= scale * 0.85
-            provider_ratio *= scale * 0.85
-
-        title_ratio = max(title_ratio, 0.05)
-        provider_ratio = max(provider_ratio, 0.025)
-
+    # Recalculate title
     title_h, title_w, title_data = measure_text_block(
         title_lines, title_ratio, font_path
     )
 
+    # ---------------------------------------------------------
+    # 2) PROVIDER — independent small sizing (Big Bass behaviour)
+    # ---------------------------------------------------------
+    prov_data = None
+    prov_h = prov_w = 0
+
     if provider:
+        for _ in range(10):
+            prov_h, prov_w, prov_data = measure_text_block(
+                [provider], provider_ratio, font_path
+            )
+
+            fits_width  = prov_w <= available_width
+            fits_height = (title_h + min_gap + prov_h) <= available_height
+
+            if fits_width and fits_height:
+                break
+
+            # provider must fit width and height separately
+            scale_w = available_width / prov_w if prov_w else 1
+            scale_h = (available_height - title_h - min_gap) / prov_h if prov_h else 1
+
+            provider_ratio *= min(scale_w, scale_h) * 0.90
+
         prov_h, prov_w, prov_data = measure_text_block(
             [provider], provider_ratio, font_path
         )
+
+    # ---------------------------------------------------------
+    # FINAL POSITIONING
+    # ---------------------------------------------------------
+    if provider:
         total_h = title_h + min_gap + prov_h
         title_y = text_area_start + (available_height - total_h) // 2
-        prov_y = title_y + title_h + min_gap
+        prov_y  = title_y + title_h + min_gap
     else:
         title_y = text_area_start + (available_height - title_h) // 2
 
-    draw_text_block(canvas, title_data, title_y, (255, 255, 255, 255))
+    # Draw title (image or text)
+    if title_image is not None:
+        # Use title image instead of text - positioned at same Y as text title
+        from .title_image import render_title_image
+        canvas = render_title_image(canvas, title_image, max_width_ratio=0.7, scale=1.0, y_position=title_y)
+    else:
+        # Use text title
+        draw_text_block(canvas, title_data, title_y, (255, 255, 255, 255))
 
+    # Draw provider (if exists)
     if provider:
         draw_text_block(canvas, prov_data, prov_y, (255, 255, 255, 235))
+
+    # ---------------------------------------------------------
+    # PROVIDER LOGO (if enabled)
+    # ---------------------------------------------------------
+    if provider_logo is not None:
+        from ..provider_logo import render_provider_logo
+
+        # Create a minimal config for provider logo rendering
+        # We need this to pass positioning/scaling info to render_provider_logo
+        cfg = type('obj', (object,), {
+            'provider_logo': type('obj', (object,), {
+                'position': 'bottom_right',
+                'margin': 18,
+                'max_width_ratio': 0.25,
+                'max_height_ratio': 0.12,
+                'opacity': 1.0,
+                'invert_for_dark': True
+            })()
+        })()
+
+        canvas = render_provider_logo(canvas, provider_logo, cfg)
 
     return canvas

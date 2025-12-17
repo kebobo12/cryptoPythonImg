@@ -114,17 +114,22 @@ class GameConfig:
         # NEW FIELDS
         self.layout = layout                  # "default", "crypto", etc.
         self.title_text = title_text          # For crypto layout
-        self.band_color = band_color or (0, 0, 0)  # RGB color for crypto band, default black
+        self.band_color = band_color          # RGB color for crypto band, None = auto-detect
 
 # ------------------------------------------------------------
 # Internal helpers
 # ------------------------------------------------------------
 
-def _validate_title_lines(value: Any) -> List[str]:
+def _validate_title_lines(value: Any, folder_name: str = None) -> List[str]:
+    # If title_lines not provided or empty, use folder name
+    if value is None or (isinstance(value, list) and len(value) == 0):
+        if folder_name:
+            return [folder_name]
+        raise InvalidConfigError("`title_lines` must be provided or folder name must be available.")
+
     if not isinstance(value, list) or not all(isinstance(x, str) for x in value):
         raise InvalidConfigError("`title_lines` must be a list of strings.")
-    if len(value) == 0:
-        raise InvalidConfigError("`title_lines` cannot be empty.")
+
     return value
 
 
@@ -182,7 +187,10 @@ def load_config(path: Path) -> GameConfig:
     except json.JSONDecodeError as exc:
         raise InvalidConfigError(f"Invalid JSON in {path}: {exc}") from exc
 
-    title_lines = _validate_title_lines(raw.get("title_lines"))
+    # Get folder name for auto-title
+    folder_name = path.parent.name
+
+    title_lines = _validate_title_lines(raw.get("title_lines"), folder_name)
     subtitle = raw.get("subtitle", "")
     provider_text = raw.get("provider_text", "")
     output_filename = raw.get("output_filename", f"{path.parent.name}.png")

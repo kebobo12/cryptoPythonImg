@@ -10,6 +10,7 @@ def render_title_image(
     title_img: Image.Image,
     max_width_ratio: float,
     scale: float,
+    y_position: int = None,
 ):
     """
     Render a title image inside the blurred band.
@@ -63,8 +64,13 @@ def render_title_image(
     )
 
     x = (CANVAS_W - new_width) // 2
-    title_center_y = int(CANVAS_H * 0.83)  # Higher position
-    y = title_center_y - (new_height // 2)
+
+    # Use provided y_position (pixel value) or default to 83% down
+    if y_position is not None:
+        y = y_position
+    else:
+        title_center_y = int(CANVAS_H * 0.83)
+        y = title_center_y - (new_height // 2)
 
 
 

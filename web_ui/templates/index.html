@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Thumbnail Generator</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1>Thumbnail Generator</h1>
+            <p class="subtitle">Create stunning game thumbnails with ease</p>
+        </header>
+
+        <!-- Mode Selector -->
+        <div class="mode-selector">
+            <button class="mode-btn active" data-mode="single">Single Game</button>
+            <button class="mode-btn" data-mode="bulk">Bulk Process</button>
+        </div>
+
+        <!-- Main Content -->
+        <div class="content">
+            <!-- Single Game Mode -->
+            <div id="single-mode" class="mode-content active">
+                <div class="section">
+                    <h2>Select Game</h2>
+                    <div class="game-selector">
+                        <select id="game-select" class="select-input">
+                            <option value="">Choose a game...</option>
+                        </select>
+                    </div>
+
+                    <div id="game-info" class="game-info" style="display: none;">
+                        <div class="info-row">
+                            <span class="label">Provider:</span>
+                            <span id="provider-name" class="value"></span>
+                        </div>
+                        <div class="info-row">
+                            <span class="label">Game:</span>
+                            <span id="game-name" class="value"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h2>Blur Band</h2>
+                    <div class="control-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="blur-enabled" checked>
+                            <span>Enable blur band</span>
+                        </label>
+
+                        <div id="blur-options" class="blur-options">
+                            <div class="radio-group">
+                                <label class="radio-label">
+                                    <input type="radio" name="blur-mode" value="auto" checked>
+                                    <span>Auto-detect from background</span>
+                                </label>
+                                <label class="radio-label">
+                                    <input type="radio" name="blur-mode" value="manual">
+                                    <span>Manual color selection</span>
+                                </label>
+                            </div>
+
+                            <div id="color-picker-group" class="color-picker-group" style="display: none;">
+                                <label for="blur-color">Blur Color:</label>
+                                <input type="color" id="blur-color" value="#000000">
+                                <span id="color-preview" class="color-preview"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h2>Title</h2>
+                    <div class="radio-group">
+                        <label class="radio-label">
+                            <input type="radio" name="title-mode" value="text" checked>
+                            <span>Auto from folder name</span>
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="title-mode" value="image">
+                            <span>Use title image</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h2>Provider</h2>
+                    <div class="radio-group">
+                        <label class="radio-label">
+                            <input type="radio" name="provider-mode" value="none">
+                            <span>Don't show</span>
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="provider-mode" value="text" checked>
+                            <span>Auto from provider name</span>
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="provider-mode" value="logo">
+                            <span>Use provider logo</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="actions">
+                    <button id="generate-btn" class="btn btn-primary" disabled>
+                        Generate Thumbnail
+                    </button>
+                </div>
+
+                <div id="single-status" class="status"></div>
+
+                <div id="preview-container" class="preview-container" style="display: none;">
+                    <h3>Preview</h3>
+                    <img id="preview-image" src="" alt="Generated thumbnail">
+                </div>
+            </div>
+
+            <!-- Bulk Mode -->
+            <div id="bulk-mode" class="mode-content">
+                <div class="section">
+                    <h2>Select Games</h2>
+                    <div class="bulk-controls">
+                        <button id="select-all-btn" class="btn btn-secondary">Select All</button>
+                        <button id="deselect-all-btn" class="btn btn-secondary">Deselect All</button>
+                    </div>
+
+                    <div id="bulk-games-list" class="games-list"></div>
+                </div>
+
+                <div class="section">
+                    <h2>Settings</h2>
+                    <div class="control-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="bulk-blur-enabled" checked>
+                            <span>Enable blur band</span>
+                        </label>
+
+                        <div id="bulk-blur-options" class="blur-options">
+                            <div class="radio-group">
+                                <label class="radio-label">
+                                    <input type="radio" name="bulk-blur-mode" value="auto" checked>
+                                    <span>Auto-detect from background</span>
+                                </label>
+                                <label class="radio-label">
+                                    <input type="radio" name="bulk-blur-mode" value="manual">
+                                    <span>Manual color selection</span>
+                                </label>
+                            </div>
+
+                            <div id="bulk-color-picker-group" class="color-picker-group" style="display: none;">
+                                <label for="bulk-blur-color">Blur Color:</label>
+                                <input type="color" id="bulk-blur-color" value="#000000">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="radio-group">
+                        <h3>Title</h3>
+                        <label class="radio-label">
+                            <input type="radio" name="bulk-title-mode" value="text" checked>
+                            <span>Auto from folder name</span>
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="bulk-title-mode" value="image">
+                            <span>Use title image</span>
+                        </label>
+                    </div>
+
+                    <div class="radio-group">
+                        <h3>Provider</h3>
+                        <label class="radio-label">
+                            <input type="radio" name="bulk-provider-mode" value="none">
+                            <span>Don't show</span>
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="bulk-provider-mode" value="text" checked>
+                            <span>Auto from provider name</span>
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="bulk-provider-mode" value="logo">
+                            <span>Use provider logo</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="actions">
+                    <button id="generate-bulk-btn" class="btn btn-primary" disabled>
+                        Generate Selected
+                    </button>
+                </div>
+
+                <div id="bulk-progress" class="progress-bar" style="display: none;">
+                    <div id="progress-fill" class="progress-fill"></div>
+                    <span id="progress-text" class="progress-text">0%</span>
+                </div>
+
+                <div id="bulk-status" class="status"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
