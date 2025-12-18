@@ -31,15 +31,56 @@ else:
 
 THUMBNAILS_ROOT = BASE_DIR / "Thumbnails"
 OUTPUT_DIR = BASE_DIR / "output"
+FONTS_DIR = BASE_DIR / "fonts"
 
 # Ensure output directory exists
 OUTPUT_DIR.mkdir(exist_ok=True)
+
+
+def get_available_fonts():
+    """Get list of available fonts in the fonts directory."""
+    fonts = []
+
+    if not FONTS_DIR.exists():
+        return fonts
+
+    # Find all .ttf and .otf files
+    for font_file in FONTS_DIR.rglob("*.ttf"):
+        rel_path = font_file.relative_to(BASE_DIR)
+        fonts.append({
+            'path': str(rel_path).replace('\\', '/'),
+            'name': font_file.stem,
+            'family': font_file.parent.name
+        })
+
+    for font_file in FONTS_DIR.rglob("*.otf"):
+        rel_path = font_file.relative_to(BASE_DIR)
+        fonts.append({
+            'path': str(rel_path).replace('\\', '/'),
+            'name': font_file.stem,
+            'family': font_file.parent.name
+        })
+
+    # Sort by family then name
+    fonts.sort(key=lambda x: (x['family'], x['name']))
+
+    return fonts
 
 
 @app.route('/')
 def index():
     """Render main UI page."""
     return render_template('index.html')
+
+
+@app.route('/api/fonts')
+def get_fonts():
+    """Get list of all available fonts."""
+    try:
+        fonts = get_available_fonts()
+        return jsonify({'success': True, 'fonts': fonts})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.route('/api/games')
@@ -165,9 +206,18 @@ def generate():
             config['provider_text'] = ""
         elif provider_mode == 'text':
             config['provider_logo']['enabled'] = False
+            # Always set provider_text from folder name when text mode is selected
             config['provider_text'] = game_dir.parent.name
         else:  # logo
             config['provider_logo']['enabled'] = True
+            config['provider_text'] = ""
+
+        # Apply custom font if provided
+        if settings.get('custom_font'):
+            # Convert to absolute path to avoid issues with working directory
+            font_rel_path = settings['custom_font']
+            font_abs_path = (BASE_DIR / font_rel_path).resolve()
+            config['font_path'] = str(font_abs_path).replace('\\', '/')
 
         # Write updated config
         with open(config_path, 'w', encoding='utf-8') as f:
@@ -188,9 +238,15 @@ def generate():
         })
 
     except ThumbgenError as e:
+        import traceback
+        print(f"[ERROR] ThumbgenError: {e}", flush=True)
+        traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 400
 
     except Exception as e:
+        import traceback
+        print(f"[ERROR] Exception: {e}", flush=True)
+        traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -247,9 +303,18 @@ def generate_bulk():
                     config['provider_text'] = ""
                 elif provider_mode == 'text':
                     config['provider_logo']['enabled'] = False
+                    # Always set provider_text from folder name when text mode is selected
                     config['provider_text'] = game_dir.parent.name
                 else:
                     config['provider_logo']['enabled'] = True
+                    config['provider_text'] = ""
+
+                # Apply custom font if provided
+                if settings.get('custom_font'):
+                    # Convert to absolute path to avoid issues with working directory
+                    font_rel_path = settings['custom_font']
+                    font_abs_path = (BASE_DIR / font_rel_path).resolve()
+                    config['font_path'] = str(font_abs_path).replace('\\', '/')
 
                 with open(config_path, 'w', encoding='utf-8') as f:
                     json.dump(config, f, indent=2)

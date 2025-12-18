@@ -2,6 +2,7 @@
 
 // State
 let allGames = [];
+let allFonts = [];
 let selectedGamePath = null;
 
 // DOM Elements
@@ -16,6 +17,15 @@ const generateBtn = document.getElementById('generate-btn');
 const singleStatus = document.getElementById('single-status');
 const previewContainer = document.getElementById('preview-container');
 const previewImage = document.getElementById('preview-image');
+
+// Font controls
+const customFontEnabled = document.getElementById('custom-font-enabled');
+const fontSelectContainer = document.getElementById('font-select-container');
+const fontSelect = document.getElementById('font-select');
+
+const bulkCustomFontEnabled = document.getElementById('bulk-custom-font-enabled');
+const bulkFontSelectContainer = document.getElementById('bulk-font-select-container');
+const bulkFontSelect = document.getElementById('bulk-font-select');
 
 // Blur controls
 const blurEnabled = document.getElementById('blur-enabled');
@@ -44,6 +54,7 @@ const bulkBlurColor = document.getElementById('bulk-blur-color');
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
     loadGames();
+    loadFonts();
     setupEventListeners();
 
     // Initialize UI state
@@ -51,6 +62,8 @@ document.addEventListener('DOMContentLoaded', () => {
     toggleColorPicker();
     toggleBulkBlurOptions();
     toggleBulkColorPicker();
+    toggleFontSelect();
+    toggleBulkFontSelect();
 });
 
 // Event Listeners
@@ -69,6 +82,10 @@ function setupEventListeners() {
         radio.addEventListener('change', toggleColorPicker);
     });
     blurColor.addEventListener('input', updateColorPreview);
+
+    // Font controls
+    customFontEnabled.addEventListener('change', toggleFontSelect);
+    bulkCustomFontEnabled.addEventListener('change', toggleBulkFontSelect);
 
     // Bulk blur controls
     bulkBlurEnabled.addEventListener('change', toggleBulkBlurOptions);
@@ -116,6 +133,34 @@ async function loadGames() {
     } catch (error) {
         showStatus('error', 'Failed to load games: ' + error.message, singleStatus);
     }
+}
+
+// Load Fonts
+async function loadFonts() {
+    try {
+        const response = await fetch('/api/fonts');
+        const data = await response.json();
+
+        if (data.success) {
+            allFonts = data.fonts;
+            populateFontSelects();
+        } else {
+            console.error('Failed to load fonts:', data.error);
+        }
+    } catch (error) {
+        console.error('Failed to load fonts:', error.message);
+    }
+}
+
+// Populate Font Selects
+function populateFontSelects() {
+    const options = '<option value="">Use default font</option>' +
+        allFonts.map(font =>
+            `<option value="${font.path}">[${font.family}] ${font.name}</option>`
+        ).join('');
+
+    fontSelect.innerHTML = options;
+    bulkFontSelect.innerHTML = options;
 }
 
 // Populate Game Dropdown
@@ -173,6 +218,14 @@ function toggleBulkColorPicker() {
     bulkColorPickerGroup.style.display = manual ? 'flex' : 'none';
 }
 
+function toggleFontSelect() {
+    fontSelectContainer.style.display = customFontEnabled.checked ? 'block' : 'none';
+}
+
+function toggleBulkFontSelect() {
+    bulkFontSelectContainer.style.display = bulkCustomFontEnabled.checked ? 'block' : 'none';
+}
+
 // Get Settings
 function getSettings() {
     const blurMode = document.querySelector('input[name="blur-mode"]:checked').value;
@@ -188,6 +241,10 @@ function getSettings() {
     if (blurEnabled.checked && blurMode === 'manual') {
         const hex = blurColor.value;
         settings.blur_manual_color = hexToRgb(hex);
+    }
+
+    if (customFontEnabled.checked && fontSelect.value) {
+        settings.custom_font = fontSelect.value;
     }
 
     console.log('Settings being sent:', settings);
@@ -208,6 +265,10 @@ function getBulkSettings() {
     if (bulkBlurEnabled.checked && blurMode === 'manual') {
         const hex = bulkBlurColor.value;
         settings.blur_manual_color = hexToRgb(hex);
+    }
+
+    if (bulkCustomFontEnabled.checked && bulkFontSelect.value) {
+        settings.custom_font = bulkFontSelect.value;
     }
 
     return settings;

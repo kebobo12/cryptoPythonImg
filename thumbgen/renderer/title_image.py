@@ -8,9 +8,9 @@ from ..utils.images import alpha_composite
 def render_title_image(
     canvas: Image.Image,
     title_img: Image.Image,
-    max_width_ratio: float,
-    scale: float,
+    scale: float = 1.0,
     y_position: int = None,
+    provider_height: int = 0,
 ):
     """
     Render a title image inside the blurred band.
@@ -18,44 +18,35 @@ def render_title_image(
     Args:
         canvas: The main canvas to draw on.
         title_img: The title image to render.
-        band_y: Y position of the band.
-        band_height: Height of the band.
-        max_width_ratio: Maximum width as ratio of canvas width.
         scale: Additional scaling factor for fine-tuning.
+        y_position: Optional Y position override (ignored if provider_height is set).
+        provider_height: Height of provider text below title (for dynamic centering).
 
     Returns:
         Modified canvas with title image rendered.
     """
 
-    # Calculate maximum width
-    max_width = int(CANVAS_W * max_width_ratio)
+    # Auto-scale to fit within available area (same constraints as text title)
+    available_width = int(CANVAS_W * 0.92)
+    # Text area height: from 68% to 95% of canvas = 27% height available
+    available_height = int(CANVAS_H * 0.27)
 
     # Get original dimensions
     orig_width, orig_height = title_img.size
 
-    # Calculate scaling to fit within max_width
-    if orig_width > max_width:
-        scaling_factor = max_width / orig_width
-    else:
-        scaling_factor = 1.0
+    # Calculate scale factors for both dimensions
+    width_scale = available_width / orig_width
+    height_scale = available_height / orig_height
 
-    # Apply additional scale parameter
-    scaling_factor *= scale
+    # Use the smaller scale to ensure it fits in both dimensions
+    final_scale = min(width_scale, height_scale)
 
-    # For Cleocatra-style: title should be very large and positioned low
-    # Scale to fit width constraint
-    target_width = int(CANVAS_W * 0.95)  # Very large title
-    if orig_width > target_width:
-        width_scale = target_width / orig_width
-    else:
-        width_scale = 1.0
+    # Apply config scale parameter for fine-tuning
+    final_scale *= scale
 
-    # Apply config scale
-    width_scale *= scale
-
-    # Calculate dimensions
-    new_width = int(orig_width * width_scale)
-    new_height = int(orig_height * width_scale)
+    # Calculate final dimensions
+    new_width = int(orig_width * final_scale)
+    new_height = int(orig_height * final_scale)
 
     # Resize the title image
     title_img_scaled = title_img.resize(
@@ -65,12 +56,21 @@ def render_title_image(
 
     x = (CANVAS_W - new_width) // 2
 
-    # Use provided y_position (pixel value) or default to 83% down
-    if y_position is not None:
+    # Dynamic Y positioning based on provider text
+    text_area_start = int(CANVAS_H * 0.68)
+    text_area_end = int(CANVAS_H * 0.95)
+    available_height_area = text_area_end - text_area_start
+
+    if provider_height > 0:
+        # Center both title image and provider text within the text area
+        min_gap = int(CANVAS_H * 0.04)
+        total_h = new_height + min_gap + provider_height
+        y = text_area_start + (available_height_area - total_h) // 2
+    elif y_position is not None:
         y = y_position
     else:
-        title_center_y = int(CANVAS_H * 0.83)
-        y = title_center_y - (new_height // 2)
+        # Center the title image alone in the text area
+        y = text_area_start + (available_height_area - new_height) // 2
 
 
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from PIL import Image, ImageDraw, ImageFont
-from ..constants import CANVAS_W, CANVAS_H
+from ..constants import CANVAS_W, CANVAS_H, get_provider_font
 from ..utils.text import text_size
 
 
@@ -21,7 +21,10 @@ def render_text_block(
     # Better typography scaling
     title_font = ImageFont.truetype(font_path, int(CANVAS_H * 0.085))
     subtitle_font = ImageFont.truetype(font_path, int(CANVAS_H * 0.055))
-    provider_font = ImageFont.truetype(font_path, int(CANVAS_H * 0.040))
+
+    # Use provider-specific font for provider text
+    provider_font_path = get_provider_font(provider_text, fallback=font_path) if provider_text else font_path
+    provider_font = ImageFont.truetype(provider_font_path, int(CANVAS_H * 0.040))
 
     lines = []
     for t in title_lines:

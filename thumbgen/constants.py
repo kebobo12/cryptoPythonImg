@@ -83,9 +83,47 @@ WHITE_ALPHA: int = 255   # 0–255
 
 # Mapping of provider names to their specific fonts
 # Provider names are normalized (uppercase, no special chars)
-PROVIDER_FONTS = {
-    "HACKSAW GAMING": "fonts/hacksaw/anton.ttf",
-    "HACKSAW": "fonts/hacksaw/anton.ttf",
-    "PRAGMATIC PLAY": "fonts/pragmatic/Gotham Bold/Gotham Bold.otf",
-    "PRAGMATIC": "fonts/pragmatic/Gotham Bold/Gotham Bold.otf",
-}
+def _get_provider_font_map():
+    """Get provider fonts map with absolute paths."""
+    from pathlib import Path
+
+    # Find the project root (where fonts/ directory is)
+    # This file is in thumbgen/constants.py, so go up one level
+    project_root = Path(__file__).parent.parent
+
+    return {
+        "HACKSAW GAMING": str(project_root / "fonts/hacksaw/anton.ttf"),
+        "HACKSAW": str(project_root / "fonts/hacksaw/anton.ttf"),
+        "PRAGMATIC PLAY": str(project_root / "fonts/pragmatic/Gotham Bold/Gotham Bold.otf"),
+        "PRAGMATIC": str(project_root / "fonts/pragmatic/Gotham Bold/Gotham Bold.otf"),
+    }
+
+PROVIDER_FONTS = _get_provider_font_map()
+
+def get_provider_font(provider_name: str, fallback: str = None) -> str:
+    """
+    Get the provider-specific font path based on provider name.
+
+    Args:
+        provider_name: The provider name (e.g., "Hacksaw", "Pragmatic Play")
+        fallback: Fallback font path if provider not found (defaults to DEFAULT_FONT_PATH)
+
+    Returns:
+        Font path for the provider, or fallback if not found
+    """
+    if fallback is None:
+        fallback = DEFAULT_FONT_PATH
+
+    # Normalize provider name: uppercase, strip whitespace
+    normalized = provider_name.strip().upper()
+
+    # Direct lookup
+    if normalized in PROVIDER_FONTS:
+        return PROVIDER_FONTS[normalized]
+
+    # Try partial matching (e.g., "HACKSAW GAMING" matches "HACKSAW")
+    for key in PROVIDER_FONTS:
+        if key in normalized or normalized in key:
+            return PROVIDER_FONTS[key]
+
+    return fallback

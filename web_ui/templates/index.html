@@ -105,6 +105,21 @@
                     </div>
                 </div>
 
+                <div class="section">
+                    <h2>Title Font</h2>
+                    <div class="control-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="custom-font-enabled">
+                            <span>Use custom font</span>
+                        </label>
+                        <div id="font-select-container" class="font-select-container" style="display: none;">
+                            <select id="font-select" class="select-input">
+                                <option value="">Loading fonts...</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="actions">
                     <button id="generate-btn" class="btn btn-primary" disabled>
                         Generate Thumbnail
@@ -184,6 +199,19 @@
                             <input type="radio" name="bulk-provider-mode" value="logo">
                             <span>Use provider logo</span>
                         </label>
+                    </div>
+
+                    <div class="control-group">
+                        <h3>Title Font</h3>
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="bulk-custom-font-enabled">
+                            <span>Use custom font</span>
+                        </label>
+                        <div id="bulk-font-select-container" class="font-select-container" style="display: none;">
+                            <select id="bulk-font-select" class="select-input">
+                                <option value="">Loading fonts...</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
 

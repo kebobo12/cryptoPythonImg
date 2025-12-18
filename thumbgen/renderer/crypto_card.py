@@ -1,7 +1,7 @@
 from __future__ import annotations
 from PIL import Image, ImageFilter, ImageDraw, ImageFont
 
-from ..constants import CANVAS_W, CANVAS_H, DEFAULT_FONT_PATH
+from ..constants import CANVAS_W, CANVAS_H, DEFAULT_FONT_PATH, get_provider_font
 from ..utils.images import alpha_composite
 
 
@@ -40,7 +40,7 @@ def crypto_blur_background(bg: Image.Image) -> Image.Image:
 # -------------------------------------------------------------
 def measure_text_block(lines, font_ratio, font_path, line_gap_ratio=0.01):
     draw = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
-    size = int(CANVAS_H * font_ratio)
+    size = max(1, int(CANVAS_H * font_ratio))  # Ensure minimum size of 1
     font = ImageFont.truetype(font_path or DEFAULT_FONT_PATH, size)
 
     total_height = 0
@@ -215,24 +215,52 @@ def render_crypto_card(background, character, title_lines, provider, font_path=N
     provider_ratio = 0.048
     min_gap = int(CANVAS_H * 0.04)
 
+    # Reserve space for provider if present
+    min_provider_height = int(CANVAS_H * 0.03) if provider else 0  # ~16px for provider
+
     # ---------------------------------------------------------
-    # 1) TITLE — Fit WIDTH only (same as your Big Bass output)
+    # 1) TITLE — Fit WIDTH and respect provider space
     # ---------------------------------------------------------
     for _ in range(10):
         title_h, title_w, title_data = measure_text_block(
             title_lines, title_ratio, font_path
         )
 
-        if title_w <= available_width:
+        fits_width = title_w <= available_width
+
+        # If there's a provider, ensure title doesn't take too much vertical space
+        if provider:
+            max_title_height = available_height - min_gap - min_provider_height
+            fits_height = title_h <= max_title_height
+        else:
+            fits_height = True
+
+        if fits_width and fits_height:
             break
 
-        scale = (available_width / title_w) * 0.92
+        # Scale down based on what doesn't fit
+        if not fits_width:
+            scale = (available_width / title_w) * 0.92
+        else:  # doesn't fit height (provider case)
+            scale = (max_title_height / title_h) * 0.92
+
         title_ratio *= scale
 
     # Recalculate title
     title_h, title_w, title_data = measure_text_block(
         title_lines, title_ratio, font_path
     )
+
+    # If using title image, calculate its actual height for layout purposes
+    actual_title_h = title_h
+    if title_image is not None:
+        available_width_img = int(CANVAS_W * 0.92)
+        available_height_img = int(CANVAS_H * 0.27)
+        orig_width, orig_height = title_image.size
+        width_scale = available_width_img / orig_width
+        height_scale = available_height_img / orig_height
+        final_scale = min(width_scale, height_scale)
+        actual_title_h = int(orig_height * final_scale)
 
     # ---------------------------------------------------------
     # 2) PROVIDER — independent small sizing (Big Bass behaviour)
@@ -241,42 +269,90 @@ def render_crypto_card(background, character, title_lines, provider, font_path=N
     prov_h = prov_w = 0
 
     if provider:
-        for _ in range(10):
+        # Use provider-specific font
+        provider_font_path = get_provider_font(provider, fallback=font_path)
+
+        # Calculate remaining height for provider text
+        remaining_height = max(0, available_height - actual_title_h - min_gap)
+
+        print(f"[DEBUG] Provider ratio before loop: {provider_ratio}", flush=True)
+        print(f"[DEBUG] Title height (text={title_h}, actual={actual_title_h})", flush=True)
+        print(f"[DEBUG] Available height={available_height}, remaining for provider={remaining_height}", flush=True)
+
+        # If there's no room for provider text, skip it
+        if remaining_height < 10:
+            print(f"[DEBUG] Not enough space for provider text (remaining={remaining_height}px), skipping", flush=True)
+            provider = None
+            prov_h = prov_w = 0
+            prov_data = None
+        else:
+            # Adjust initial provider ratio based on available space
+            max_provider_ratio = remaining_height / CANVAS_H
+            if provider_ratio > max_provider_ratio:
+                provider_ratio = max_provider_ratio * 0.9
+                print(f"[DEBUG] Adjusted provider ratio to {provider_ratio}", flush=True)
+
+            for _ in range(10):
+                prov_h, prov_w, prov_data = measure_text_block(
+                    [provider], provider_ratio, provider_font_path
+                )
+
+                print(f"[DEBUG] Provider size: w={prov_w}, h={prov_h}, ratio={provider_ratio}", flush=True)
+
+                fits_width  = prov_w <= available_width
+                # Use actual_title_h instead of title_h for proper spacing
+                fits_height = (actual_title_h + min_gap + prov_h) <= available_height
+
+                if fits_width and fits_height:
+                    break
+
+                # provider must fit width and height separately
+                scale_w = available_width / prov_w if prov_w else 1
+                # Use actual_title_h for correct remaining height calculation
+                scale_h = remaining_height / prov_h if prov_h and remaining_height > 0 else 0.1
+
+                provider_ratio *= max(0.01, min(scale_w, scale_h)) * 0.90
+
+            # Final measurement
             prov_h, prov_w, prov_data = measure_text_block(
-                [provider], provider_ratio, font_path
+                [provider], provider_ratio, provider_font_path
             )
-
-            fits_width  = prov_w <= available_width
-            fits_height = (title_h + min_gap + prov_h) <= available_height
-
-            if fits_width and fits_height:
-                break
-
-            # provider must fit width and height separately
-            scale_w = available_width / prov_w if prov_w else 1
-            scale_h = (available_height - title_h - min_gap) / prov_h if prov_h else 1
-
-            provider_ratio *= min(scale_w, scale_h) * 0.90
-
-        prov_h, prov_w, prov_data = measure_text_block(
-            [provider], provider_ratio, font_path
-        )
 
     # ---------------------------------------------------------
     # FINAL POSITIONING
     # ---------------------------------------------------------
     if provider:
-        total_h = title_h + min_gap + prov_h
+        # Use actual_title_h for positioning calculations
+        total_h = actual_title_h + min_gap + prov_h
         title_y = text_area_start + (available_height - total_h) // 2
-        prov_y  = title_y + title_h + min_gap
+        prov_y  = title_y + actual_title_h + min_gap
     else:
-        title_y = text_area_start + (available_height - title_h) // 2
+        title_y = text_area_start + (available_height - actual_title_h) // 2
 
     # Draw title (image or text)
     if title_image is not None:
-        # Use title image instead of text - positioned at same Y as text title
+        # Use title image with dynamic positioning based on provider height
         from .title_image import render_title_image
-        canvas = render_title_image(canvas, title_image, max_width_ratio=0.7, scale=1.0, y_position=title_y)
+        canvas = render_title_image(canvas, title_image, scale=1.0, provider_height=prov_h if provider else 0)
+
+        # If there's a provider, we need to calculate where it goes relative to the title image
+        if provider:
+            # The title_image renderer centers both, so we need to recalculate provider Y
+            # Get the actual image dimensions after scaling
+            available_width = int(CANVAS_W * 0.92)
+            available_height_constraint = int(CANVAS_H * 0.27)
+
+            orig_width, orig_height = title_image.size
+            width_scale = available_width / orig_width
+            height_scale = available_height_constraint / orig_height
+            final_scale = min(width_scale, height_scale)
+
+            new_height = int(orig_height * final_scale)
+
+            # Calculate where title starts and provider should go
+            total_h = new_height + min_gap + prov_h
+            title_y_actual = text_area_start + (available_height - total_h) // 2
+            prov_y = title_y_actual + new_height + min_gap
     else:
         # Use text title
         draw_text_block(canvas, title_data, title_y, (255, 255, 255, 255))

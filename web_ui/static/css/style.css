@@ -157,6 +157,10 @@ body {
     box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
 }
 
+.font-select-container {
+    margin-top: 12px;
+}
+
 /* Game Info */
 .game-info {
     background: var(--bg-color);
