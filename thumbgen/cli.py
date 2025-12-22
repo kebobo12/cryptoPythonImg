@@ -53,13 +53,12 @@ def resolve_dirs(
 
 def find_all_game_directories(root: Path) -> List[Path]:
     """
-    Find all game directories in either old or new structure.
+    Find all game directories in Provider/Game structure.
 
-    Old structure: games/GameName/config.json
-    New structure: Thumbnails/Provider/GameName/config.json
+    Structure: Thumbnails/Provider/GameName/
 
     Args:
-        root: Root directory to search (either games/ or Thumbnails/)
+        root: Root directory to search (Thumbnails/)
 
     Returns:
         List of Path objects pointing to game directories
@@ -69,22 +68,15 @@ def find_all_game_directories(root: Path) -> List[Path]:
     if not root.exists():
         return game_dirs
 
-    # Check if this is the old flat structure
-    # (has config.json files in immediate subdirectories)
-    for item in sorted(root.iterdir()):
-        if item.is_dir():
-            config_file = item / "config.json"
-            if config_file.exists():
-                # Old structure: this is a game directory
-                game_dirs.append(item)
-            else:
-                # New structure: this might be a provider folder
-                # Look for game folders inside
-                for sub_item in sorted(item.iterdir()):
-                    if sub_item.is_dir():
-                        sub_config = sub_item / "config.json"
-                        if sub_config.exists():
-                            game_dirs.append(sub_item)
+    # Traverse Provider/Game structure
+    for provider_dir in sorted(root.iterdir()):
+        if provider_dir.is_dir():
+            # Look for game folders inside provider folder
+            for game_dir in sorted(provider_dir.iterdir()):
+                if game_dir.is_dir():
+                    # Skip special folders like "Provider Logo"
+                    if game_dir.name.lower() not in ['provider logo', 'assets', '.git']:
+                        game_dirs.append(game_dir)
 
     return game_dirs
 

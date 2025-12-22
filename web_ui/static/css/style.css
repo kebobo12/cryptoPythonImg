@@ -381,6 +381,22 @@ body {
 }
 
 /* Bulk Mode */
+.filter-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+    padding: 16px;
+    background: var(--bg-color);
+    border-radius: 8px;
+}
+
+.filter-controls label {
+    color: var(--text-secondary);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
 .bulk-controls {
     display: flex;
     gap: 12px;
@@ -476,6 +492,124 @@ body {
     background: var(--primary-hover);
 }
 
+/* Provider Font Manager */
+.help-text {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    margin-bottom: 12px;
+}
+
+.provider-font-manager {
+    background: var(--bg-color);
+    padding: 16px;
+    border-radius: 8px;
+}
+
+.provider-font-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr auto;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.provider-fonts-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.provider-font-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px;
+    background: var(--surface-color);
+    border-radius: 6px;
+    border-left: 3px solid var(--primary-color);
+}
+
+.provider-font-info {
+    flex: 1;
+}
+
+.provider-font-provider {
+    color: var(--secondary-color);
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.provider-font-name {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.btn-remove {
+    padding: 8px 16px;
+    background: var(--error-color);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.btn-remove:hover {
+    opacity: 0.8;
+}
+
+/* Modal */
+.modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.75);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.modal {
+    background: var(--surface-color);
+    border-radius: 16px;
+    box-shadow: var(--shadow-lg);
+    max-width: 700px;
+    width: 100%;
+    padding: 20px 24px 24px;
+}
+
+.modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+
+.modal-header h2 {
+    font-size: 1.4rem;
+}
+
+.modal-close {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 1.6rem;
+    cursor: pointer;
+    padding: 4px 8px;
+    line-height: 1;
+}
+
+.modal-close:hover {
+    color: var(--text-primary);
+}
+
+.modal-body {
+    margin-top: 8px;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .header h1 {
@@ -492,5 +626,9 @@ body {
 
     .bulk-controls {
         flex-direction: column;
+    }
+
+    .provider-font-row {
+        grid-template-columns: 1fr;
     }
 }

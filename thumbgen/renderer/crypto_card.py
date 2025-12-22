@@ -41,6 +41,9 @@ def crypto_blur_background(bg: Image.Image) -> Image.Image:
 def measure_text_block(lines, font_ratio, font_path, line_gap_ratio=0.01):
     draw = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
     size = max(1, int(CANVAS_H * font_ratio))  # Ensure minimum size of 1
+    from pathlib import Path
+    font_file_exists = Path(font_path or DEFAULT_FONT_PATH).exists() if font_path else True
+    print(f"[DEBUG MEASURE] Font path: {font_path}, Size: {size}, Exists: {font_file_exists}", flush=True)
     font = ImageFont.truetype(font_path or DEFAULT_FONT_PATH, size)
 
     total_height = 0
@@ -68,6 +71,8 @@ def draw_text_block(canvas, line_data, y_start, fill):
 
     for line, font, _bbox, w, h in line_data:
         x = (CANVAS_W - w) // 2
+        font_name = font.getname() if hasattr(font, 'getname') else 'unknown'
+        print(f"[DEBUG DRAW] Drawing '{line}' with font {font} (family={font_name}) at ({x}, {y})", flush=True)
         draw.text((x, y), line, font=font, fill=fill)
         y += h + int(CANVAS_H * 0.01)
 
@@ -78,7 +83,18 @@ def draw_text_block(canvas, line_data, y_start, fill):
 # -------------------------------------------------------------
 # MAIN RENDERER — Crypto / Pragmatic Play Style (WITH FINAL ELLIPSE CLIP)
 # -------------------------------------------------------------
-def render_crypto_card(background, character, title_lines, provider, font_path=None, band_color=None, provider_logo=None, title_image=None):
+def render_crypto_card(
+    background,
+    character,
+    title_lines,
+    provider,
+    font_path=None,
+    provider_font_path=None,
+    band_color=None,
+    provider_logo=None,
+    title_image=None,
+    blur_enabled=True,
+):
 
     canvas = crypto_blur_background(background)
 
@@ -110,97 +126,95 @@ def render_crypto_card(background, character, title_lines, provider, font_path=N
     alpha_composite(canvas, resized, (cx, cy))
 
     # ---------------------------------------------------------
-    # COLOR DETECTION (main hue)
+    # CURVED BAND WITH GRADIENT FADE (two ellipses) - OPTIONAL
     # ---------------------------------------------------------
-    # Use manual band_color if provided, otherwise auto-detect
-    if band_color is not None:
-        r, g, b = band_color
-    else:
-        quantized = canvas.quantize(colors=32, method=2)
-        quantized_rgb = quantized.convert("RGB")
-        small = quantized_rgb.resize((50, 50), Image.LANCZOS)
+    if blur_enabled:
+        # COLOR DETECTION (main hue)
+        # Use manual band_color if provided, otherwise auto-detect
+        if band_color is not None:
+            r, g, b = band_color
+        else:
+            quantized = canvas.quantize(colors=32, method=2)
+            quantized_rgb = quantized.convert("RGB")
+            small = quantized_rgb.resize((50, 50), Image.LANCZOS)
 
-        detected_color = None
-        colors = small.getcolors(2500)
+            detected_color = None
+            colors = small.getcolors(2500)
 
-        if colors:
-            colors.sort(key=lambda x: x[0], reverse=True)
+            if colors:
+                colors.sort(key=lambda x: x[0], reverse=True)
 
-            for count, col in colors:
-                if isinstance(col, tuple):
-                    r, g, b = col
-                    avg = (r + g + b) / 3
-                    variance = abs(r - avg) + abs(g - avg) + abs(b - avg)
-
-                    if variance > 30 and (r + g + b) > 100:
-                        detected_color = (r, g, b)
-                        break
-
-            if detected_color is None:
-                for _, col in colors:
+                for count, col in colors:
                     if isinstance(col, tuple):
                         r, g, b = col
-                        if 30 < r + g + b < 700:
+                        avg = (r + g + b) / 3
+                        variance = abs(r - avg) + abs(g - avg) + abs(b - avg)
+
+                        if variance > 30 and (r + g + b) > 100:
                             detected_color = (r, g, b)
                             break
 
-        if detected_color is None:
-            detected_color = (50, 50, 50)
+                if detected_color is None:
+                    for _, col in colors:
+                        if isinstance(col, tuple):
+                            r, g, b = col
+                            if 30 < r + g + b < 700:
+                                detected_color = (r, g, b)
+                                break
 
-        r, g, b = detected_color
+            if detected_color is None:
+                detected_color = (50, 50, 50)
 
-    # ---------------------------------------------------------
-    # CURVED BAND WITH GRADIENT FADE (two ellipses)
-    # ---------------------------------------------------------
+            r, g, b = detected_color
 
-    # Small ellipse (solid core - almost edge to edge, flatter)
-    SMALL_ARC_W = int(CANVAS_W * 1.15)
-    SMALL_ARC_H = int(CANVAS_H * 0.315)  # 10% flatter (0.35 * 0.9)
+        # Small ellipse (solid core - almost edge to edge, flatter)
+        SMALL_ARC_W = int(CANVAS_W * 1.15)
+        SMALL_ARC_H = int(CANVAS_H * 0.315)  # 10% flatter (0.35 * 0.9)
 
-    small_bbox = (
-        CANVAS_W // 2 - SMALL_ARC_W // 2,
-        int(CANVAS_H - SMALL_ARC_H * 0.7),  # Higher position (was 0.5)
-        CANVAS_W // 2 + SMALL_ARC_W // 2,
-        int(CANVAS_H + SMALL_ARC_H * 1.3)   # Extends further down
-    )
+        small_bbox = (
+            CANVAS_W // 2 - SMALL_ARC_W // 2,
+            int(CANVAS_H - SMALL_ARC_H * 0.7),  # Higher position (was 0.5)
+            CANVAS_W // 2 + SMALL_ARC_W // 2,
+            int(CANVAS_H + SMALL_ARC_H * 1.3)   # Extends further down
+        )
 
-    # Large ellipse (fade extent - reaches title area)
-    LARGE_ARC_W = int(CANVAS_W * 1.1)
-    LARGE_ARC_H = int(CANVAS_H * 0.65)  # Much taller
+        # Large ellipse (fade extent - reaches title area)
+        LARGE_ARC_W = int(CANVAS_W * 1.1)
+        LARGE_ARC_H = int(CANVAS_H * 0.65)  # Much taller
 
-    large_bbox = (
-        CANVAS_W // 2 - LARGE_ARC_W // 2,
-        int(CANVAS_H - LARGE_ARC_H * 0.5),
-        CANVAS_W // 2 + LARGE_ARC_W // 2,
-        int(CANVAS_H + LARGE_ARC_H * 1.5)
-    )
+        large_bbox = (
+            CANVAS_W // 2 - LARGE_ARC_W // 2,
+            int(CANVAS_H - LARGE_ARC_H * 0.5),
+            CANVAS_W // 2 + LARGE_ARC_W // 2,
+            int(CANVAS_H + LARGE_ARC_H * 1.5)
+        )
 
-    # Create gradient overlay
-    gradient_overlay = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
+        # Create gradient overlay
+        gradient_overlay = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
 
-    # Layer 1: Solid core (small ellipse) - more opaque
-    core_layer = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
-    core_draw = ImageDraw.Draw(core_layer)
-    core_draw.pieslice(small_bbox, 180, 360, fill=(r, g, b, 255))
-    core_blurred = core_layer.filter(ImageFilter.GaussianBlur(25))
-    gradient_overlay = Image.alpha_composite(gradient_overlay, core_blurred)
+        # Layer 1: Solid core (small ellipse) - more opaque
+        core_layer = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
+        core_draw = ImageDraw.Draw(core_layer)
+        core_draw.pieslice(small_bbox, 180, 360, fill=(r, g, b, 255))
+        core_blurred = core_layer.filter(ImageFilter.GaussianBlur(25))
+        gradient_overlay = Image.alpha_composite(gradient_overlay, core_blurred)
 
-    # Layer 2: Medium fade - more pronounced bleed
-    mid_layer = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
-    mid_draw = ImageDraw.Draw(mid_layer)
-    mid_draw.pieslice(large_bbox, 180, 360, fill=(r, g, b, 220))
-    mid_blurred = mid_layer.filter(ImageFilter.GaussianBlur(80))  # Increased from 50
-    gradient_overlay = Image.alpha_composite(gradient_overlay, mid_blurred)
+        # Layer 2: Medium fade - more pronounced bleed
+        mid_layer = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
+        mid_draw = ImageDraw.Draw(mid_layer)
+        mid_draw.pieslice(large_bbox, 180, 360, fill=(r, g, b, 220))
+        mid_blurred = mid_layer.filter(ImageFilter.GaussianBlur(80))  # Increased from 50
+        gradient_overlay = Image.alpha_composite(gradient_overlay, mid_blurred)
 
-    # Layer 3: Outer fade - stronger color with bleed
-    outer_layer = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
-    outer_draw = ImageDraw.Draw(outer_layer)
-    outer_draw.pieslice(large_bbox, 180, 360, fill=(r, g, b, 240))  # Increased from 200
-    outer_blurred = outer_layer.filter(ImageFilter.GaussianBlur(140))
-    gradient_overlay = Image.alpha_composite(gradient_overlay, outer_blurred)
+        # Layer 3: Outer fade - stronger color with bleed
+        outer_layer = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
+        outer_draw = ImageDraw.Draw(outer_layer)
+        outer_draw.pieslice(large_bbox, 180, 360, fill=(r, g, b, 240))  # Increased from 200
+        outer_blurred = outer_layer.filter(ImageFilter.GaussianBlur(140))
+        gradient_overlay = Image.alpha_composite(gradient_overlay, outer_blurred)
 
-    # Composite onto canvas
-    canvas = Image.alpha_composite(canvas, gradient_overlay)
+        # Composite onto canvas
+        canvas = Image.alpha_composite(canvas, gradient_overlay)
 
         # ---------------------------------------------------------
     # TEXT BLOCK (title + provider) — MATCH BIG BASS OUTPUT
@@ -263,57 +277,35 @@ def render_crypto_card(background, character, title_lines, provider, font_path=N
         actual_title_h = int(orig_height * final_scale)
 
     # ---------------------------------------------------------
-    # 2) PROVIDER — independent small sizing (Big Bass behaviour)
+    # 2) PROVIDER — keep sizing/position consistent
     # ---------------------------------------------------------
     prov_data = None
     prov_h = prov_w = 0
 
     if provider:
-        # Use provider-specific font
-        provider_font_path = get_provider_font(provider, fallback=font_path)
+        # Provider font: explicit provider_font_path (from UI) wins,
+        # otherwise fall back to main title font.
+        effective_provider_font_path = provider_font_path or font_path
+        provider_font_path = get_provider_font(provider, fallback=effective_provider_font_path)
 
-        # Calculate remaining height for provider text
-        remaining_height = max(0, available_height - actual_title_h - min_gap)
+        # Fixed base ratio for consistency
+        provider_ratio = 0.045
 
-        print(f"[DEBUG] Provider ratio before loop: {provider_ratio}", flush=True)
-        print(f"[DEBUG] Title height (text={title_h}, actual={actual_title_h})", flush=True)
-        print(f"[DEBUG] Available height={available_height}, remaining for provider={remaining_height}", flush=True)
+        # Measure once with the base ratio
+        prov_h, prov_w, prov_data = measure_text_block(
+            [provider], provider_ratio, provider_font_path
+        )
 
-        # If there's no room for provider text, skip it
-        if remaining_height < 10:
-            print(f"[DEBUG] Not enough space for provider text (remaining={remaining_height}px), skipping", flush=True)
-            provider = None
-            prov_h = prov_w = 0
-            prov_data = None
-        else:
-            # Adjust initial provider ratio based on available space
-            max_provider_ratio = remaining_height / CANVAS_H
-            if provider_ratio > max_provider_ratio:
-                provider_ratio = max_provider_ratio * 0.9
-                print(f"[DEBUG] Adjusted provider ratio to {provider_ratio}", flush=True)
+        # Remaining space to the bottom; anchor provider near bottom with padding
+        bottom_padding = int(CANVAS_H * 0.04)
+        max_provider_h = max(1, text_area_end - bottom_padding - text_area_start)
 
-            for _ in range(10):
-                prov_h, prov_w, prov_data = measure_text_block(
-                    [provider], provider_ratio, provider_font_path
-                )
-
-                print(f"[DEBUG] Provider size: w={prov_w}, h={prov_h}, ratio={provider_ratio}", flush=True)
-
-                fits_width  = prov_w <= available_width
-                # Use actual_title_h instead of title_h for proper spacing
-                fits_height = (actual_title_h + min_gap + prov_h) <= available_height
-
-                if fits_width and fits_height:
-                    break
-
-                # provider must fit width and height separately
-                scale_w = available_width / prov_w if prov_w else 1
-                # Use actual_title_h for correct remaining height calculation
-                scale_h = remaining_height / prov_h if prov_h and remaining_height > 0 else 0.1
-
-                provider_ratio *= max(0.01, min(scale_w, scale_h)) * 0.90
-
-            # Final measurement
+        # If it would overflow, shrink a bit (light clamp)
+        if prov_w > available_width or prov_h > max_provider_h:
+            scale_w = available_width / prov_w if prov_w else 1
+            scale_h = max_provider_h / prov_h if prov_h else 1
+            scale = min(scale_w, scale_h) * 0.9
+            provider_ratio = max(0.03, provider_ratio * scale)
             prov_h, prov_w, prov_data = measure_text_block(
                 [provider], provider_ratio, provider_font_path
             )
@@ -322,10 +314,19 @@ def render_crypto_card(background, character, title_lines, provider, font_path=N
     # FINAL POSITIONING
     # ---------------------------------------------------------
     if provider:
-        # Use actual_title_h for positioning calculations
-        total_h = actual_title_h + min_gap + prov_h
-        title_y = text_area_start + (available_height - total_h) // 2
-        prov_y  = title_y + actual_title_h + min_gap
+        # Anchor provider near bottom with padding for consistency
+        bottom_padding = int(CANVAS_H * 0.04)
+        prov_y = text_area_end - bottom_padding - prov_h
+
+        # Space available for title above provider
+        available_for_title = prov_y - min_gap - text_area_start
+        if available_for_title > 0:
+            title_y = text_area_start + max(0, (available_for_title - actual_title_h) // 2)
+        else:
+            # Fallback: stack title above provider
+            total_h = actual_title_h + min_gap + prov_h
+            title_y = text_area_start + (available_height - total_h) // 2
+            prov_y = title_y + actual_title_h + min_gap
     else:
         title_y = text_area_start + (available_height - actual_title_h) // 2
 

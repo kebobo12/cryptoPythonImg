@@ -10,7 +10,8 @@ def render_text_block(
     title_lines,
     subtitle,
     provider_text,
-    font_path
+    font_path,
+    provider_font_path: str | None = None,
 ):
     """
     Draw text inside the blurred band.
@@ -18,20 +19,25 @@ def render_text_block(
 
     draw = ImageDraw.Draw(canvas)
 
-    # Better typography scaling
+    # Better typography scaling (TITLE/SUBTITLE)
     title_font = ImageFont.truetype(font_path, int(CANVAS_H * 0.085))
     subtitle_font = ImageFont.truetype(font_path, int(CANVAS_H * 0.055))
 
-    # Use provider-specific font for provider text
-    provider_font_path = get_provider_font(provider_text, fallback=font_path) if provider_text else font_path
-    provider_font = ImageFont.truetype(provider_font_path, int(CANVAS_H * 0.040))
+    # Provider font: use explicit provider_font_path if supplied (from UI),
+    # otherwise fall back to the main title font.
+    if provider_text:
+        effective_provider_font_path = provider_font_path or font_path
+        provider_font_path_resolved = get_provider_font(provider_text, fallback=effective_provider_font_path)
+        provider_font = ImageFont.truetype(provider_font_path_resolved, int(CANVAS_H * 0.040))
+    else:
+        provider_font = None
 
     lines = []
     for t in title_lines:
         lines.append((t, title_font))
     if subtitle:
         lines.append((subtitle, subtitle_font))
-    if provider_text:
+    if provider_text and provider_font:
         lines.append((provider_text, provider_font))
 
     line_gap = int(CANVAS_H * 0.015)

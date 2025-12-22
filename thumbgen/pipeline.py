@@ -19,7 +19,6 @@ from typing import Optional
 from PIL import Image
 from PIL import Image, ImageFilter, ImageDraw
 
-from .config import GameConfig, load_config
 from .loader import load_assets
 from .errors import ProcessingError
 from .utils.logging import ok, error, heading
@@ -33,12 +32,55 @@ from .provider_logo import render_provider_logo
 from .constants import CANVAS_W, CANVAS_H
 
 
-def generate_thumbnail(game_dir: Path, output_dir: Path) -> Optional[Path]:
+def generate_thumbnail(game_dir: Path, output_dir: Path, settings: dict = None) -> Optional[Path]:
     start_time = time.time()
 
     try:
-        cfg_path = game_dir / "config.json"
-        cfg: GameConfig = load_config(cfg_path)
+        from .config import GameConfig, TitleImageConfig, ProviderLogoConfig
+        from .constants import DEFAULT_CHARACTER_HEIGHT_RATIO, DEFAULT_FONT_PATH
+
+        # Use default settings if none provided
+        if settings is None:
+            settings = {}
+
+        # Provider name from folder
+        provider_name = game_dir.parent.name
+
+        # Provider text from folder name if enabled
+        provider_text = provider_name if settings.get('provider_mode') == 'text' else ""
+
+        # Font selection (TITLE / MAIN TEXT):
+        # - custom_font (from UI) controls title/subtitle font
+        # - otherwise, use global DEFAULT_FONT_PATH
+        if settings.get('custom_font'):
+            font_path = settings['custom_font']
+            if not Path(font_path).is_absolute():
+                # Make relative paths absolute
+                font_path = str((game_dir.parent.parent.parent / font_path).resolve())
+        else:
+            font_path = DEFAULT_FONT_PATH
+
+        # Provider font selection (PROVIDER TEXT ONLY):
+        provider_font_path = settings.get('provider_font')
+        if provider_font_path and not Path(provider_font_path).is_absolute():
+            provider_font_path = str((game_dir.parent.parent.parent / provider_font_path).resolve())
+
+        cfg = GameConfig(
+            title_lines=[game_dir.name],
+            subtitle="",
+            provider_text=provider_text,
+            output_filename=f"{game_dir.name.lower().replace(' ', '_')}.png",
+            character_height_ratio=DEFAULT_CHARACTER_HEIGHT_RATIO,
+            font_path=font_path,
+            provider_logo=ProviderLogoConfig(
+                enabled=settings.get('provider_mode') == 'logo'
+            ),
+            title_image=TitleImageConfig(
+                enabled=settings.get('title_mode') == 'image'
+            ),
+            layout='crypto',
+            band_color=settings.get('blur_manual_color') if settings.get('blur_enabled') and settings.get('blur_manual_color') else None,
+        )
 
         assets = load_assets(game_dir, cfg)
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -54,15 +96,18 @@ def generate_thumbnail(game_dir: Path, output_dir: Path) -> Optional[Path]:
 
             blur_style = getattr(cfg, "blur_style", "straight")
             band_color = getattr(cfg, "band_color", None)
+            blur_enabled = settings.get('blur_enabled', True)
             canvas = render_crypto_card(
                 background=assets.background,
                 character=assets.characters[0],
                 title_lines=cfg.title_lines,
                 provider=cfg.provider_text,
                 font_path=cfg.font_path,
+                provider_font_path=provider_font_path,
                 band_color=band_color,
                 provider_logo=assets.provider_logo,
                 title_image=assets.title_image,
+                blur_enabled=blur_enabled,
             )
 
             out_path = output_dir / cfg.output_filename
@@ -171,6 +216,7 @@ def generate_thumbnail(game_dir: Path, output_dir: Path) -> Optional[Path]:
                 subtitle=cfg.subtitle,
                 provider_text=cfg.provider_text,
                 font_path=cfg.font_path,
+                provider_font_path=provider_font_path,
             )
 
         # Provider logo

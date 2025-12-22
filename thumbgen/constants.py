@@ -64,8 +64,10 @@ CHAR_MAX_WIDTH_RATIO: float = 0.90  # Characters use max 90% of canvas width
 # Font configuration
 # -----------------------------------------------------------
 
-# Default system font fallback (Linux-friendly, works on Windows if installed)
-DEFAULT_FONT_PATH: str = "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf"
+# Default font path (use AMA-Regular as default)
+from pathlib import Path
+_project_root = Path(__file__).parent.parent
+DEFAULT_FONT_PATH: str = str(_project_root / "fonts/ama_squiggly/AMA-Regular.ttf")
 
 # Text size ratios relative to canvas height
 TITLE_FONT_RATIO: float = 0.11
@@ -96,34 +98,20 @@ def _get_provider_font_map():
         "HACKSAW": str(project_root / "fonts/hacksaw/anton.ttf"),
         "PRAGMATIC PLAY": str(project_root / "fonts/pragmatic/Gotham Bold/Gotham Bold.otf"),
         "PRAGMATIC": str(project_root / "fonts/pragmatic/Gotham Bold/Gotham Bold.otf"),
+        "WICKED GAMES": str(project_root / "fonts/ama_squiggly/AMA-Regular.ttf"),
     }
 
 PROVIDER_FONTS = _get_provider_font_map()
 
 def get_provider_font(provider_name: str, fallback: str = None) -> str:
     """
-    Get the provider-specific font path based on provider name.
+    Resolve provider font with a UI-first approach.
 
-    Args:
-        provider_name: The provider name (e.g., "Hacksaw", "Pragmatic Play")
-        fallback: Fallback font path if provider not found (defaults to DEFAULT_FONT_PATH)
-
-    Returns:
-        Font path for the provider, or fallback if not found
+    Priority:
+    1) If caller supplies a fallback (e.g., UI provider font or custom font), use it.
+    2) Otherwise, fall back to DEFAULT_FONT_PATH.
     """
     if fallback is None:
         fallback = DEFAULT_FONT_PATH
-
-    # Normalize provider name: uppercase, strip whitespace
-    normalized = provider_name.strip().upper()
-
-    # Direct lookup
-    if normalized in PROVIDER_FONTS:
-        return PROVIDER_FONTS[normalized]
-
-    # Try partial matching (e.g., "HACKSAW GAMING" matches "HACKSAW")
-    for key in PROVIDER_FONTS:
-        if key in normalized or normalized in key:
-            return PROVIDER_FONTS[key]
 
     return fallback

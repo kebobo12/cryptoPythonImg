@@ -32,6 +32,7 @@ else:
 THUMBNAILS_ROOT = BASE_DIR / "Thumbnails"
 OUTPUT_DIR = BASE_DIR / "output"
 FONTS_DIR = BASE_DIR / "fonts"
+PROVIDER_FONTS_FILE = BASE_DIR / "provider_fonts.json"
 
 # Ensure output directory exists
 OUTPUT_DIR.mkdir(exist_ok=True)
@@ -67,6 +68,30 @@ def get_available_fonts():
     return fonts
 
 
+def load_provider_fonts():
+    """Load provider font associations from JSON file."""
+    if not PROVIDER_FONTS_FILE.exists():
+        return {}
+
+    try:
+        with open(PROVIDER_FONTS_FILE, 'r') as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"Error loading provider fonts: {e}", flush=True)
+        return {}
+
+
+def save_provider_fonts(provider_fonts):
+    """Save provider font associations to JSON file."""
+    try:
+        with open(PROVIDER_FONTS_FILE, 'w') as f:
+            json.dump(provider_fonts, f, indent=2)
+        return True
+    except Exception as e:
+        print(f"Error saving provider fonts: {e}", flush=True)
+        return False
+
+
 @app.route('/')
 def index():
     """Render main UI page."""
@@ -94,19 +119,10 @@ def get_games():
             provider = game_dir.parent.name
             game_name = game_dir.name
 
-            # Check for config
-            config_path = game_dir / "config.json"
-            if config_path.exists():
-                with open(config_path, 'r', encoding='utf-8') as f:
-                    config = json.load(f)
-            else:
-                config = {}
-
             games.append({
                 'path': str(game_dir.relative_to(THUMBNAILS_ROOT)),
                 'provider': provider,
-                'name': game_name,
-                'config': config
+                'name': game_name
             })
 
         return jsonify({'success': True, 'games': games})
@@ -124,13 +140,6 @@ def get_game_details(game_path):
         if not game_dir.exists():
             return jsonify({'success': False, 'error': 'Game not found'}), 404
 
-        config_path = game_dir / "config.json"
-        if config_path.exists():
-            with open(config_path, 'r', encoding='utf-8') as f:
-                config = json.load(f)
-        else:
-            config = {}
-
         # Check what assets exist
         assets = {
             'background': (game_dir / "background.png").exists(),
@@ -141,7 +150,6 @@ def get_game_details(game_path):
 
         return jsonify({
             'success': True,
-            'config': config,
             'assets': assets,
             'provider': game_dir.parent.name,
             'name': game_dir.name
@@ -167,69 +175,18 @@ def generate():
         if not game_dir.exists():
             return jsonify({'success': False, 'error': 'Game not found'}), 404
 
-        # Apply settings to config
-        config_path = game_dir / "config.json"
-
-        with open(config_path, 'r', encoding='utf-8') as f:
-            config = json.load(f)
-
-        # Force crypto layout
-        config['layout'] = 'crypto'
-
-        # Apply blur settings
-        if settings.get('blur_enabled'):
-            if settings.get('blur_manual_color'):
-                config['band_color'] = settings['blur_manual_color']
-            else:
-                config.pop('band_color', None)
-        else:
-            config.pop('band_color', None)
-
-        # Apply title settings
-        if 'title_image' not in config:
-            config['title_image'] = {
-                'enabled': False,
-                'path': 'title.png',
-                'max_width_ratio': 0.7,
-                'scale': 1.0
-            }
-        config['title_image']['enabled'] = settings.get('title_mode') == 'image'
-
-        print(f"DEBUG: Title mode = {settings.get('title_mode')}, title_image enabled = {config['title_image']['enabled']}", flush=True)
-
-        # Apply provider settings
-        config['provider_logo'] = config.get('provider_logo', {})
-        provider_mode = settings.get('provider_mode', 'text')
-
-        if provider_mode == 'none':
-            config['provider_logo']['enabled'] = False
-            config['provider_text'] = ""
-        elif provider_mode == 'text':
-            config['provider_logo']['enabled'] = False
-            # Always set provider_text from folder name when text mode is selected
-            config['provider_text'] = game_dir.parent.name
-        else:  # logo
-            config['provider_logo']['enabled'] = True
-            config['provider_text'] = ""
-
-        # Apply custom font if provided
+        # Apply provider default font for PROVIDER TEXT only (not title),
+        # unless a custom font override is specified from the UI.
+        provider_name = game_dir.parent.name
+        provider_fonts_map = load_provider_fonts()
+        if provider_name in provider_fonts_map and not settings.get('provider_font'):
+            settings['provider_font'] = provider_fonts_map[provider_name]
+            print(f"[PROVIDER FONT] Using provider default for {provider_name}: {settings['provider_font']}", flush=True)
         if settings.get('custom_font'):
-            # Convert to absolute path to avoid issues with working directory
-            font_rel_path = settings['custom_font']
-            font_abs_path = (BASE_DIR / font_rel_path).resolve()
-            config['font_path'] = str(font_abs_path).replace('\\', '/')
+            print(f"[PROVIDER FONT] Using custom title font override: {settings.get('custom_font')}", flush=True)
 
-        # Write updated config
-        with open(config_path, 'w', encoding='utf-8') as f:
-            json.dump(config, f, indent=2)
-
-        print(f"DEBUG: Config written to {config_path}", flush=True)
-        print(f"DEBUG: title_image.enabled = {config.get('title_image', {}).get('enabled')}", flush=True)
-        print(f"DEBUG: provider_logo.enabled = {config.get('provider_logo', {}).get('enabled')}", flush=True)
-        print(f"DEBUG: provider_text = {config.get('provider_text')}", flush=True)
-
-        # Generate thumbnail
-        result_path = generate_thumbnail(game_dir, OUTPUT_DIR)
+        # Generate thumbnail with settings (no config.json needed)
+        result_path = generate_thumbnail(game_dir, OUTPUT_DIR, settings=settings)
 
         return jsonify({
             'success': True,
@@ -258,11 +215,15 @@ def generate_bulk():
         game_paths = data.get('game_paths', [])
         settings = data.get('settings', {})
 
+        print(f"[BULK GEN] Received settings: {settings}", flush=True)
+
         if not game_paths:
             return jsonify({'success': False, 'error': 'No games selected'}), 400
 
         results = []
         success_count = 0
+        provider_fonts_map = load_provider_fonts()
+        print(f"[BULK GEN] Loaded provider fonts map: {provider_fonts_map}", flush=True)
 
         for game_path in game_paths:
             try:
@@ -276,50 +237,17 @@ def generate_bulk():
                     })
                     continue
 
-                # Apply settings (same as single generate)
-                config_path = game_dir / "config.json"
+                # Apply provider default font for PROVIDER TEXT only (not title),
+                # unless a provider_font override is already present.
+                game_settings = settings.copy()
+                provider_name = game_dir.parent.name
+                print(f"[BULK GEN] Game: {game_dir.name}, Provider: {provider_name}, Current provider_font: {game_settings.get('provider_font')}", flush=True)
+                if provider_name in provider_fonts_map and not game_settings.get('provider_font'):
+                    game_settings['provider_font'] = provider_fonts_map[provider_name]
+                    print(f"[PROVIDER FONT] {game_dir.name}: Using provider default for {provider_name}: {game_settings['provider_font']}", flush=True)
 
-                with open(config_path, 'r', encoding='utf-8') as f:
-                    config = json.load(f)
-
-                config['layout'] = 'crypto'
-
-                if settings.get('blur_enabled'):
-                    if settings.get('blur_manual_color'):
-                        config['band_color'] = settings['blur_manual_color']
-                    else:
-                        config.pop('band_color', None)
-                else:
-                    config.pop('band_color', None)
-
-                config['title_image'] = config.get('title_image', {})
-                config['title_image']['enabled'] = settings.get('title_mode') == 'image'
-
-                config['provider_logo'] = config.get('provider_logo', {})
-                provider_mode = settings.get('provider_mode', 'text')
-
-                if provider_mode == 'none':
-                    config['provider_logo']['enabled'] = False
-                    config['provider_text'] = ""
-                elif provider_mode == 'text':
-                    config['provider_logo']['enabled'] = False
-                    # Always set provider_text from folder name when text mode is selected
-                    config['provider_text'] = game_dir.parent.name
-                else:
-                    config['provider_logo']['enabled'] = True
-                    config['provider_text'] = ""
-
-                # Apply custom font if provided
-                if settings.get('custom_font'):
-                    # Convert to absolute path to avoid issues with working directory
-                    font_rel_path = settings['custom_font']
-                    font_abs_path = (BASE_DIR / font_rel_path).resolve()
-                    config['font_path'] = str(font_abs_path).replace('\\', '/')
-
-                with open(config_path, 'w', encoding='utf-8') as f:
-                    json.dump(config, f, indent=2)
-
-                result_path = generate_thumbnail(game_dir, OUTPUT_DIR)
+                # Generate thumbnail with settings (no config.json needed)
+                result_path = generate_thumbnail(game_dir, OUTPUT_DIR, settings=game_settings)
 
                 results.append({
                     'game': game_path,
@@ -356,6 +284,62 @@ def get_preview(output_path):
             return jsonify({'success': False, 'error': 'File not found'}), 404
 
         return send_file(file_path, mimetype='image/png')
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/provider-fonts')
+def get_provider_fonts():
+    """Get all provider font associations."""
+    try:
+        provider_fonts = load_provider_fonts()
+        return jsonify({'success': True, 'provider_fonts': provider_fonts})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/provider-fonts', methods=['POST'])
+def set_provider_font():
+    """Set default font for a provider."""
+    try:
+        data = request.json
+        provider = data.get('provider')
+        font_path = data.get('font_path')
+
+        if not provider:
+            return jsonify({'success': False, 'error': 'Provider is required'}), 400
+
+        if not font_path:
+            return jsonify({'success': False, 'error': 'Font path is required'}), 400
+
+        provider_fonts = load_provider_fonts()
+        provider_fonts[provider] = font_path
+
+        if save_provider_fonts(provider_fonts):
+            return jsonify({'success': True, 'message': f'Set default font for {provider}'})
+        else:
+            return jsonify({'success': False, 'error': 'Failed to save provider fonts'}), 500
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/provider-fonts/<provider>', methods=['DELETE'])
+def delete_provider_font(provider):
+    """Remove default font for a provider."""
+    try:
+        provider_fonts = load_provider_fonts()
+
+        if provider not in provider_fonts:
+            return jsonify({'success': False, 'error': 'Provider not found'}), 404
+
+        del provider_fonts[provider]
+
+        if save_provider_fonts(provider_fonts):
+            return jsonify({'success': True, 'message': f'Removed default font for {provider}'})
+        else:
+            return jsonify({'success': False, 'error': 'Failed to save provider fonts'}), 500
 
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
