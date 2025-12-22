@@ -7,6 +7,11 @@ let providerFonts = {};
 let selectedGamePath = null;
 let selectedProvider = '';
 
+// Live preview state
+let previewDebounceTimer = null;
+let previewInProgress = false;
+const DEBOUNCE_DELAY = 200; // milliseconds
+
 // DOM Elements
 const modeBtns = document.querySelectorAll('.mode-btn');
 const singleMode = document.getElementById('single-mode');
@@ -36,6 +41,8 @@ const blurModeRadios = document.querySelectorAll('input[name="blur-mode"]');
 const colorPickerGroup = document.getElementById('color-picker-group');
 const blurColor = document.getElementById('blur-color');
 const colorPreview = document.getElementById('color-preview');
+const blurScale = document.getElementById('blur-scale');
+const blurScaleValue = document.getElementById('blur-scale-value');
 
 // Bulk mode elements
 const providerFilter = document.getElementById('provider-filter');
@@ -63,6 +70,12 @@ const openProviderFontModalBtn = document.getElementById('open-provider-font-mod
 const providerFontModal = document.getElementById('provider-font-modal');
 const closeProviderFontModalBtn = document.getElementById('close-provider-font-modal');
 
+// Advanced text controls (single)
+const textScale = document.getElementById('text-scale');
+const textScaleValue = document.getElementById('text-scale-value');
+const textOffset = document.getElementById('text-offset');
+const textOffsetValue = document.getElementById('text-offset-value');
+
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
     loadGames();
@@ -77,6 +90,9 @@ document.addEventListener('DOMContentLoaded', () => {
     toggleBulkColorPicker();
     toggleFontSelect();
     toggleBulkFontSelect();
+    updateTextScaleValue();
+    updateTextOffsetValue();
+    updateBlurScaleValue();
 });
 
 // Event Listeners
@@ -90,14 +106,57 @@ function setupEventListeners() {
     gameSelect.addEventListener('change', onGameSelect);
 
     // Blur controls
-    blurEnabled.addEventListener('change', toggleBlurOptions);
-    blurModeRadios.forEach(radio => {
-        radio.addEventListener('change', toggleColorPicker);
+    blurEnabled.addEventListener('change', () => {
+        toggleBlurOptions();
+        debouncedPreview();
     });
-    blurColor.addEventListener('input', updateColorPreview);
+    blurModeRadios.forEach(radio => {
+        radio.addEventListener('change', () => {
+            toggleColorPicker();
+            debouncedPreview();
+        });
+    });
+    blurColor.addEventListener('input', () => {
+        updateColorPreview();
+        debouncedPreview();
+    });
+    if (blurScale) {
+        blurScale.addEventListener('input', () => {
+            updateBlurScaleValue();
+            debouncedPreview();
+        });
+    }
+
+    // Advanced text sliders
+    if (textScale) {
+        textScale.addEventListener('input', () => {
+            updateTextScaleValue();
+            debouncedPreview();
+        });
+    }
+    if (textOffset) {
+        textOffset.addEventListener('input', () => {
+            updateTextOffsetValue();
+            debouncedPreview();
+        });
+    }
+
+    // Title/provider mode radios - add live preview
+    document.querySelectorAll('input[name="title-mode"]').forEach(radio => {
+        radio.addEventListener('change', debouncedPreview);
+    });
+    document.querySelectorAll('input[name="provider-mode"]').forEach(radio => {
+        radio.addEventListener('change', debouncedPreview);
+    });
 
     // Font controls
-    customFontEnabled.addEventListener('change', toggleFontSelect);
+    customFontEnabled.addEventListener('change', () => {
+        toggleFontSelect();
+        debouncedPreview();
+    });
+    if (fontSelect) {
+        fontSelect.addEventListener('change', debouncedPreview);
+    }
     bulkCustomFontEnabled.addEventListener('change', toggleBulkFontSelect);
 
     // Bulk blur controls
@@ -368,10 +427,13 @@ function onGameSelect() {
         gameName.textContent = game.name;
         gameInfo.style.display = 'block';
         generateBtn.disabled = false;
-        previewContainer.style.display = 'none';
+
+        // Trigger initial live preview
+        updateLivePreview();
     } else {
         gameInfo.style.display = 'none';
         generateBtn.disabled = true;
+        previewContainer.style.display = 'none';
     }
 }
 
@@ -409,6 +471,21 @@ function toggleBulkFontSelect() {
     bulkFontSelectContainer.style.display = bulkCustomFontEnabled.checked ? 'block' : 'none';
 }
 
+function updateTextScaleValue() {
+    if (!textScaleValue || !textScale) return;
+    textScaleValue.textContent = `${parseFloat(textScale.value).toFixed(2)}x`;
+}
+
+function updateTextOffsetValue() {
+    if (!textOffsetValue || !textOffset) return;
+    textOffsetValue.textContent = `${parseFloat(textOffset.value).toFixed(2)}`;
+}
+
+function updateBlurScaleValue() {
+    if (!blurScaleValue || !blurScale) return;
+    blurScaleValue.textContent = `${parseFloat(blurScale.value).toFixed(2)}x`;
+}
+
 // Get Settings
 function getSettings() {
     const blurMode = document.querySelector('input[name="blur-mode"]:checked').value;
@@ -425,6 +502,11 @@ function getSettings() {
         const hex = blurColor.value;
         settings.blur_manual_color = hexToRgb(hex);
     }
+
+    // Advanced text/blur controls (single)
+    if (textScale) settings.text_scale = parseFloat(textScale.value) || 1;
+    if (textOffset) settings.text_offset = parseFloat(textOffset.value) || 0;
+    if (blurScale) settings.blur_scale = parseFloat(blurScale.value) || 1;
 
     // Only set custom_font if checkbox is enabled AND a font is selected
     if (customFontEnabled.checked && fontSelect.value) {
@@ -461,6 +543,50 @@ function getBulkSettings() {
     // This allows provider defaults to apply
 
     return settings;
+}
+
+// Live Preview Functions
+function debouncedPreview() {
+    clearTimeout(previewDebounceTimer);
+
+    previewDebounceTimer = setTimeout(() => {
+        if (!previewInProgress && selectedGamePath) {
+            updateLivePreview();
+        }
+    }, DEBOUNCE_DELAY);
+}
+
+async function updateLivePreview() {
+    if (!selectedGamePath) return;
+
+    previewInProgress = true;
+    previewContainer.classList.add('updating');
+
+    try {
+        const response = await fetch('/api/preview-live', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                game_path: selectedGamePath,
+                settings: getSettings()
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            previewImage.src = data.preview_image;
+            previewContainer.style.display = 'block';
+        } else {
+            console.error('Preview failed:', data.error);
+        }
+    } catch (error) {
+        console.error('Live preview error:', error);
+        // Fallback: preview will update on Generate button click
+    } finally {
+        previewInProgress = false;
+        previewContainer.classList.remove('updating');
+    }
 }
 
 // Generate Thumbnail

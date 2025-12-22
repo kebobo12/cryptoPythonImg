@@ -632,3 +632,36 @@ body {
         grid-template-columns: 1fr;
     }
 }
+
+/* Live preview loading state */
+.preview-container.updating {
+    opacity: 0.7;
+    position: relative;
+}
+
+.preview-container.updating::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.2);
+    z-index: 10;
+    pointer-events: none;
+}
+
+.preview-container.updating::after {
+    content: "Updating...";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 0, 0, 0.85);
+    color: white;
+    padding: 8px 16px;
+    border-radius: 4px;
+    font-size: 14px;
+    z-index: 11;
+    pointer-events: none;
+}

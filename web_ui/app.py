@@ -7,9 +7,12 @@ import sys
 import json
 import webbrowser
 from pathlib import Path
-from threading import Timer
+from threading import Timer, Lock
 from flask import Flask, render_template, request, jsonify, send_file
 from werkzeug.utils import secure_filename
+import io
+import base64
+from collections import OrderedDict
 
 # Add parent directory to path to import thumbgen
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -17,6 +20,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from thumbgen import generate_thumbnail
 from thumbgen.errors import ThumbgenError
 from thumbgen.cli import find_all_game_directories
+from thumbgen.loader import load_assets
+from thumbgen.config import GameConfig, TitleImageConfig, ProviderLogoConfig
+from thumbgen.renderer.crypto_card import render_crypto_card
+from thumbgen.constants import DEFAULT_CHARACTER_HEIGHT_RATIO, DEFAULT_FONT_PATH
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
@@ -90,6 +97,33 @@ def save_provider_fonts(provider_fonts):
     except Exception as e:
         print(f"Error saving provider fonts: {e}", flush=True)
         return False
+
+
+class LRUCache:
+    """Thread-safe LRU cache for preview assets"""
+    def __init__(self, max_size=10):
+        self.cache = OrderedDict()
+        self.max_size = max_size
+        self.lock = Lock()
+
+    def get(self, key):
+        with self.lock:
+            if key in self.cache:
+                self.cache.move_to_end(key)
+                return self.cache[key]
+            return None
+
+    def set(self, key, value):
+        with self.lock:
+            if key in self.cache:
+                self.cache.move_to_end(key)
+            self.cache[key] = value
+            if len(self.cache) > self.max_size:
+                self.cache.popitem(last=False)
+
+
+# Global preview asset cache
+preview_asset_cache = LRUCache(max_size=10)
 
 
 @app.route('/')
@@ -203,6 +237,113 @@ def generate():
     except Exception as e:
         import traceback
         print(f"[ERROR] Exception: {e}", flush=True)
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/preview-live', methods=['POST'])
+def preview_live():
+    """Generate live preview without saving to disk"""
+    try:
+        data = request.json
+        game_path = data.get('game_path')
+        settings = data.get('settings', {})
+
+        if not game_path:
+            return jsonify({'success': False, 'error': 'No game path provided'}), 400
+
+        game_dir = THUMBNAILS_ROOT / game_path
+        if not game_dir.exists():
+            return jsonify({'success': False, 'error': 'Game directory not found'}), 404
+
+        # Check cache for assets
+        cached_assets = preview_asset_cache.get(game_path)
+
+        # Provider name from folder
+        provider_name = game_dir.parent.name
+        provider_text = provider_name if settings.get('provider_mode') == 'text' else ""
+
+        # Font selection (TITLE / MAIN TEXT)
+        if settings.get('custom_font'):
+            font_path = settings['custom_font']
+            if not Path(font_path).is_absolute():
+                font_path = str((game_dir.parent.parent.parent / font_path).resolve())
+        else:
+            # Check for provider default font
+            provider_fonts_map = load_provider_fonts()
+            if provider_name in provider_fonts_map:
+                font_path = provider_fonts_map[provider_name]
+                if not Path(font_path).is_absolute():
+                    font_path = str((game_dir.parent.parent.parent / font_path).resolve())
+            else:
+                font_path = DEFAULT_FONT_PATH
+
+        # Provider font selection (PROVIDER TEXT ONLY)
+        provider_font_path = settings.get('provider_font')
+        if provider_font_path and not Path(provider_font_path).is_absolute():
+            provider_font_path = str((game_dir.parent.parent.parent / provider_font_path).resolve())
+
+        # Create config
+        cfg = GameConfig(
+            title_lines=[game_dir.name],
+            subtitle="",
+            provider_text=provider_text,
+            output_filename=f"{game_dir.name.lower().replace(' ', '_')}.png",
+            character_height_ratio=DEFAULT_CHARACTER_HEIGHT_RATIO,
+            font_path=font_path,
+            provider_logo=ProviderLogoConfig(
+                enabled=settings.get('provider_mode') == 'logo'
+            ),
+            title_image=TitleImageConfig(
+                enabled=settings.get('title_mode') == 'image'
+            ),
+            layout='crypto',
+            band_color=settings.get('blur_manual_color') if settings.get('blur_enabled') and settings.get('blur_manual_color') else None,
+        )
+
+        # Load or use cached assets
+        if cached_assets is None:
+            cached_assets = load_assets(game_dir, cfg)
+            preview_asset_cache.set(game_path, cached_assets)
+
+        # Parse settings
+        blur_enabled = settings.get('blur_enabled', True)
+        blur_scale = float(settings.get('blur_scale', 1.0))
+        text_scale = float(settings.get('text_scale', 1.0))
+        text_offset = float(settings.get('text_offset', 0.0))
+        band_color = cfg.band_color
+
+        # Render thumbnail in memory
+        canvas = render_crypto_card(
+            background=cached_assets.background,
+            character=cached_assets.characters[0],
+            title_lines=cfg.title_lines,
+            provider=cfg.provider_text,
+            font_path=cfg.font_path,
+            provider_font_path=provider_font_path,
+            band_color=band_color,
+            provider_logo=cached_assets.provider_logo,
+            title_image=cached_assets.title_image,
+            blur_enabled=blur_enabled,
+            blur_scale=blur_scale,
+            text_scale=text_scale,
+            text_offset=text_offset,
+        )
+
+        # Convert to base64
+        buffer = io.BytesIO()
+        canvas.save(buffer, format='PNG')
+        buffer.seek(0)
+        img_base64 = base64.b64encode(buffer.read()).decode('utf-8')
+
+        return jsonify({
+            'success': True,
+            'preview_image': f'data:image/png;base64,{img_base64}'
+        })
+
+    except Exception as e:
+        import traceback
+        print(f"[ERROR] Preview failed: {e}", flush=True)
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
 

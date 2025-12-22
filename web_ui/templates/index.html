@@ -214,6 +214,31 @@
                     </div>
                 </div>
 
+                <div id="preview-container" class="preview-container" style="display: none;">
+                    <h3>Live Preview</h3>
+                    <p class="help-text" style="margin-bottom: 12px;">Preview updates automatically as you adjust settings</p>
+                    <img id="preview-image" src="" alt="Generated thumbnail">
+                </div>
+
+                <div class="section">
+                    <h2>Advanced Text & Blur</h2>
+                    <div class="control-group">
+                        <label for="text-scale" class="slider-label">Text Size</label>
+                        <input type="range" id="text-scale" min="0.8" max="1.2" step="0.02" value="1" class="slider">
+                        <div class="slider-value"><span id="text-scale-value">1.00x</span></div>
+                    </div>
+                    <div class="control-group">
+                        <label for="text-offset" class="slider-label">Text Vertical Offset</label>
+                        <input type="range" id="text-offset" min="-0.1" max="0.1" step="0.01" value="0" class="slider">
+                        <div class="slider-value"><span id="text-offset-value">0.00</span></div>
+                    </div>
+                    <div class="control-group">
+                        <label for="blur-scale" class="slider-label">Blur Band Intensity</label>
+                        <input type="range" id="blur-scale" min="0.5" max="1.5" step="0.05" value="1" class="slider">
+                        <div class="slider-value"><span id="blur-scale-value">1.00x</span></div>
+                    </div>
+                </div>
+
                 <div class="section">
                     <h2>Title Font</h2>
                     <div class="control-group">
@@ -236,11 +261,6 @@
                 </div>
 
                 <div id="single-status" class="status"></div>
-
-                <div id="preview-container" class="preview-container" style="display: none;">
-                    <h3>Preview</h3>
-                    <img id="preview-image" src="" alt="Generated thumbnail">
-                </div>
             </div>
         </div>
     </div>
