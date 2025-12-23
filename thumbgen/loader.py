@@ -59,8 +59,8 @@ def find_first_image_in_folder(folder: Path) -> Optional[Path]:
     if not image_files:
         return None
 
-    # Sort and return first
-    return sorted(image_files)[0]
+    # Sort (case-insensitive) and return first
+    return sorted(image_files, key=lambda p: p.name.lower())[0]
 
 
 def find_image_file(base_path: Path) -> Optional[Path]:
@@ -124,12 +124,29 @@ def load_image(path: Path, required: bool = True) -> Optional[Image.Image]:
         raise MissingAssetError(f"Failed to load image {found_path}: {exc}") from exc
 
 
-def load_background(game_dir: Path) -> Image.Image:
+def load_background(game_dir: Path, filename: str = None) -> Image.Image:
     """
     Load background image from the game directory.
     Supports both old structure (background.png) and new structure (Backgrounds/ folder).
     Auto-detects format: PNG, JPG, JPEG, WEBP, BMP, GIF, TIFF
+
+    Args:
+        game_dir: Path to game directory
+        filename: Optional specific filename to load (e.g., 'bg2.png')
     """
+    # If filename specified, load that specific file
+    if filename:
+        backgrounds_folder = game_dir / "Backgrounds"
+        if backgrounds_folder.exists():
+            img_path = backgrounds_folder / filename
+            if img_path.exists():
+                return load_image(img_path, required=True)
+        # Try old structure (flat in game dir)
+        img_path = game_dir / filename
+        if img_path.exists():
+            return load_image(img_path, required=True)
+        raise MissingAssetError(f"Specified background '{filename}' not found in {game_dir}")
+
     # Try new structure first: Backgrounds/ folder
     backgrounds_folder = game_dir / "Backgrounds"
     if backgrounds_folder.exists() and backgrounds_folder.is_dir():
@@ -149,16 +166,38 @@ def load_character(game_dir: Path) -> Image.Image:
     return load_image(game_dir / "character", required=True)
 
 
-def load_characters(game_dir: Path) -> list[Image.Image]:
+def load_characters(game_dir: Path, filenames: list[str] = None) -> list[Image.Image]:
     """
     Load multiple character images.
     Supports both old structure (character1.png, character2.png) and new structure (Character/ folder).
     Auto-detects format: PNG, JPG, JPEG, WEBP, BMP, GIF, TIFF
 
+    Args:
+        game_dir: Path to game directory
+        filenames: Optional list of specific filenames to load (e.g., ['char1.png', 'char3.png'])
+
     Returns:
         List of character images (1-3 characters)
     """
     characters = []
+
+    # If filenames specified, load those specific files
+    if filenames:
+        character_folder = game_dir / "Character"
+        for filename in filenames[:3]:  # Max 3 characters
+            if character_folder.exists():
+                img_path = character_folder / filename
+            else:
+                img_path = game_dir / filename
+
+            if img_path.exists():
+                img = load_image(img_path, required=False)
+                if img:
+                    characters.append(img)
+
+        if characters:
+            return characters
+        # If specified files not found, fall back to discovery
 
     # Try new structure first: Character/ folder
     character_folder = game_dir / "Character"
@@ -169,8 +208,8 @@ def load_characters(game_dir: Path) -> list[Image.Image]:
             image_files.extend(character_folder.glob(f"*{ext}"))
 
         if image_files:
-            # Sort and load up to 3 characters
-            for img_path in sorted(image_files)[:3]:
+            # Sort (case-insensitive) and load up to 3 characters
+            for img_path in sorted(image_files, key=lambda p: p.name.lower())[:3]:
                 img = load_image(img_path, required=False)
                 if img:
                     characters.append(img)
@@ -194,7 +233,7 @@ def load_characters(game_dir: Path) -> list[Image.Image]:
     return characters
 
 
-def load_provider_logo(game_dir: Path, cfg: GameConfig) -> Optional[Image.Image]:
+def load_provider_logo(game_dir: Path, cfg: GameConfig, filename: str = None) -> Optional[Image.Image]:
     """
     Load provider logo if enabled in configuration.
 
@@ -206,6 +245,7 @@ def load_provider_logo(game_dir: Path, cfg: GameConfig) -> Optional[Image.Image]
     Args:
         game_dir: Directory containing the game
         cfg: GameConfig object
+        filename: Optional specific filename to load (e.g., 'logo2.png')
 
     Returns:
         Optional Image.Image
@@ -214,6 +254,27 @@ def load_provider_logo(game_dir: Path, cfg: GameConfig) -> Optional[Image.Image]
         ProviderLogoError: If loading fails unexpectedly.
     """
     if not cfg.provider_logo.enabled:
+        return None
+
+    # If filename specified, load that specific file
+    if filename:
+        provider_dir = game_dir.parent
+        provider_logo_folder = provider_dir / "Provider Logo"
+        if provider_logo_folder.exists():
+            img_path = provider_logo_folder / filename
+            if img_path.exists():
+                try:
+                    return Image.open(img_path).convert("RGBA")
+                except Exception as exc:
+                    raise ProviderLogoError(f"Failed to load provider logo {img_path}: {exc}") from exc
+        # Try game folder
+        img_path = game_dir / filename
+        if img_path.exists():
+            try:
+                return Image.open(img_path).convert("RGBA")
+            except Exception as exc:
+                raise ProviderLogoError(f"Failed to load provider logo {img_path}: {exc}") from exc
+        # Specified file not found, return None (not fatal)
         return None
 
     # Try new structure first: Provider Logo/ folder at provider level
@@ -247,7 +308,7 @@ def load_provider_logo(game_dir: Path, cfg: GameConfig) -> Optional[Image.Image]
         raise ProviderLogoError(f"Failed to load provider logo {logo_path}: {exc}") from exc
 
 
-def load_title_image(game_dir: Path, cfg: GameConfig) -> Optional[Image.Image]:
+def load_title_image(game_dir: Path, cfg: GameConfig, filename: str = None) -> Optional[Image.Image]:
     """
     Load title image if enabled in configuration.
     Supports both old structure (title.png) and new structure (Title/ folder).
@@ -256,6 +317,7 @@ def load_title_image(game_dir: Path, cfg: GameConfig) -> Optional[Image.Image]:
     Args:
         game_dir: Directory containing title image
         cfg: GameConfig object
+        filename: Optional specific filename to load (e.g., 'title2.png')
 
     Returns:
         Optional Image.Image (always converted to RGBA)
@@ -264,6 +326,28 @@ def load_title_image(game_dir: Path, cfg: GameConfig) -> Optional[Image.Image]:
         MissingAssetError: If enabled but file doesn't exist or can't be loaded.
     """
     if not cfg.title_image.enabled:
+        return None
+
+    # If filename specified, load that specific file
+    if filename:
+        title_folder = game_dir / "Title"
+        if title_folder.exists():
+            img_path = title_folder / filename
+            if img_path.exists():
+                try:
+                    img = Image.open(img_path)
+                    return img.convert("RGBA")
+                except Exception as exc:
+                    raise MissingAssetError(f"Failed to load title image {img_path}: {exc}") from exc
+        # Try old structure (flat in game dir)
+        img_path = game_dir / filename
+        if img_path.exists():
+            try:
+                img = Image.open(img_path)
+                return img.convert("RGBA")
+            except Exception as exc:
+                raise MissingAssetError(f"Failed to load title image {img_path}: {exc}") from exc
+        # Specified file not found, return None (not fatal)
         return None
 
     # Try new structure first: Title/ folder
@@ -351,21 +435,31 @@ class LoadedAssets:
         self.title_image = title_image
 
 
-def load_assets(game_dir: Path, cfg: GameConfig) -> LoadedAssets:
+def load_assets(game_dir: Path, cfg: GameConfig, asset_filenames: dict = None) -> LoadedAssets:
     """
     Load all image assets for a game in one call.
 
     Args:
         game_dir: Path to game directory
         cfg: Validated GameConfig
+        asset_filenames: Optional dict specifying which files to use:
+            {
+                'background': 'bg2.png',
+                'characters': ['char1.png', 'char3.png'],
+                'title': 'title2.png',
+                'logo': 'logo.png'
+            }
 
     Returns:
         LoadedAssets: container object with images
     """
-    background = load_background(game_dir)
-    characters = load_characters(game_dir)
-    provider_logo = load_provider_logo(game_dir, cfg)
-    title_image = load_title_image(game_dir, cfg)
+    if asset_filenames is None:
+        asset_filenames = {}
+
+    background = load_background(game_dir, asset_filenames.get('background'))
+    characters = load_characters(game_dir, asset_filenames.get('characters'))
+    provider_logo = load_provider_logo(game_dir, cfg, asset_filenames.get('logo'))
+    title_image = load_title_image(game_dir, cfg, asset_filenames.get('title'))
 
     return LoadedAssets(
         background=background,

@@ -82,7 +82,10 @@ def generate_thumbnail(game_dir: Path, output_dir: Path, settings: dict = None) 
             band_color=settings.get('blur_manual_color') if settings.get('blur_enabled') and settings.get('blur_manual_color') else None,
         )
 
-        assets = load_assets(game_dir, cfg)
+        # Extract asset filenames from settings if provided
+        asset_filenames = settings.get('asset_filenames', {})
+
+        assets = load_assets(game_dir, cfg, asset_filenames)
         output_dir.mkdir(parents=True, exist_ok=True)
 
         # --------------------------------------------------------
@@ -97,6 +100,9 @@ def generate_thumbnail(game_dir: Path, output_dir: Path, settings: dict = None) 
             blur_style = getattr(cfg, "blur_style", "straight")
             band_color = getattr(cfg, "band_color", None)
             blur_enabled = settings.get('blur_enabled', True)
+            blur_scale = float(settings.get('blur_scale', 1.0))
+            text_scale = float(settings.get('text_scale', 1.0))
+            text_offset = float(settings.get('text_offset', 0.0))
             canvas = render_crypto_card(
                 background=assets.background,
                 character=assets.characters[0],
@@ -108,6 +114,9 @@ def generate_thumbnail(game_dir: Path, output_dir: Path, settings: dict = None) 
                 provider_logo=assets.provider_logo,
                 title_image=assets.title_image,
                 blur_enabled=blur_enabled,
+                blur_scale=blur_scale,
+                text_scale=text_scale,
+                text_offset=text_offset,
             )
 
             out_path = output_dir / cfg.output_filename

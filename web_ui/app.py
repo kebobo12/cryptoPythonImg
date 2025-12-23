@@ -193,6 +193,113 @@ def get_game_details(game_path):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/game/<path:game_path>/assets')
+def get_game_assets(game_path):
+    """Get list of all available assets for a game."""
+    try:
+        # Normalize path separators - split by / and rejoin with Path
+        path_parts = game_path.split('/')
+        game_dir = THUMBNAILS_ROOT
+        for part in path_parts:
+            game_dir = game_dir / part
+
+        print(f"[ASSETS] Request for: {game_path}", flush=True)
+        print(f"[ASSETS] Full path: {game_dir}", flush=True)
+        print(f"[ASSETS] Exists: {game_dir.exists()}", flush=True)
+
+        if not game_dir.exists():
+            return jsonify({'success': False, 'error': 'Game not found'}), 404
+
+        # Supported image extensions
+        image_exts = ['.png', '.jpg', '.jpeg', '.webp', '.bmp', '.gif', '.tiff', '.tif']
+
+        def get_images_in_folder(folder):
+            """Get all image files in a folder."""
+            if not folder.exists() or not folder.is_dir():
+                return []
+            images = []
+            for ext in image_exts:
+                images.extend(folder.glob(f"*{ext}"))
+            # Sort case-insensitively to match loader.py behavior
+            return sorted([img.name for img in images], key=str.lower)
+
+        # Get backgrounds
+        backgrounds = []
+        backgrounds_folder = game_dir / "Backgrounds"
+        if backgrounds_folder.exists():
+            backgrounds = get_images_in_folder(backgrounds_folder)
+        else:
+            # Old structure - look for background.* in game folder
+            for ext in image_exts:
+                bg_file = game_dir / f"background{ext}"
+                if bg_file.exists():
+                    backgrounds.append(bg_file.name)
+                    break
+
+        # Get characters
+        characters = []
+        character_folder = game_dir / "Character"
+        if character_folder.exists():
+            characters = get_images_in_folder(character_folder)
+        else:
+            # Old structure - look for character*.* in game folder
+            for i in range(1, 10):  # Support up to 9 characters
+                found = False
+                for ext in image_exts:
+                    char_file = game_dir / f"character{i}{ext}"
+                    if char_file.exists():
+                        characters.append(char_file.name)
+                        found = True
+                        break
+                if not found:
+                    break
+            # If no numbered, try single character.*
+            if not characters:
+                for ext in image_exts:
+                    char_file = game_dir / f"character{ext}"
+                    if char_file.exists():
+                        characters.append(char_file.name)
+                        break
+
+        # Get titles
+        titles = []
+        title_folder = game_dir / "Title"
+        if title_folder.exists():
+            titles = get_images_in_folder(title_folder)
+        else:
+            for ext in image_exts:
+                title_file = game_dir / f"title{ext}"
+                if title_file.exists():
+                    titles.append(title_file.name)
+                    break
+
+        # Get provider logos
+        logos = []
+        provider_dir = game_dir.parent
+        logo_folder = provider_dir / "Provider Logo"
+        if logo_folder.exists():
+            logos = get_images_in_folder(logo_folder)
+        else:
+            for ext in image_exts:
+                logo_file = game_dir / f"logo{ext}"
+                if logo_file.exists():
+                    logos.append(logo_file.name)
+                    break
+
+        return jsonify({
+            'success': True,
+            'assets': {
+                'backgrounds': backgrounds,
+                'characters': characters,
+                'titles': titles,
+                'logos': logos
+            }
+        })
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/generate', methods=['POST'])
 def generate():
     """Generate thumbnail for a game."""
@@ -256,12 +363,20 @@ def preview_live():
         if not game_dir.exists():
             return jsonify({'success': False, 'error': 'Game directory not found'}), 404
 
-        # Check cache for assets
-        cached_assets = preview_asset_cache.get(game_path)
+        # Check cache for assets (but skip cache if custom assets are selected)
+        asset_filenames = settings.get('asset_filenames', {})
+        cache_key = game_path if not asset_filenames else None
+        cached_assets = preview_asset_cache.get(cache_key) if cache_key else None
 
         # Provider name from folder
         provider_name = game_dir.parent.name
         provider_text = provider_name if settings.get('provider_mode') == 'text' else ""
+
+        # Apply provider default font for PROVIDER TEXT only (not title),
+        # unless a custom font override is specified from the UI.
+        provider_fonts_map = load_provider_fonts()
+        if provider_name in provider_fonts_map and not settings.get('provider_font'):
+            settings['provider_font'] = provider_fonts_map[provider_name]
 
         # Font selection (TITLE / MAIN TEXT)
         if settings.get('custom_font'):
@@ -269,14 +384,8 @@ def preview_live():
             if not Path(font_path).is_absolute():
                 font_path = str((game_dir.parent.parent.parent / font_path).resolve())
         else:
-            # Check for provider default font
-            provider_fonts_map = load_provider_fonts()
-            if provider_name in provider_fonts_map:
-                font_path = provider_fonts_map[provider_name]
-                if not Path(font_path).is_absolute():
-                    font_path = str((game_dir.parent.parent.parent / font_path).resolve())
-            else:
-                font_path = DEFAULT_FONT_PATH
+            # Use default font for title text (not provider font)
+            font_path = DEFAULT_FONT_PATH
 
         # Provider font selection (PROVIDER TEXT ONLY)
         provider_font_path = settings.get('provider_font')
@@ -303,8 +412,9 @@ def preview_live():
 
         # Load or use cached assets
         if cached_assets is None:
-            cached_assets = load_assets(game_dir, cfg)
-            preview_asset_cache.set(game_path, cached_assets)
+            cached_assets = load_assets(game_dir, cfg, asset_filenames)
+            if cache_key:  # Only cache if not using custom asset selections
+                preview_asset_cache.set(cache_key, cached_assets)
 
         # Parse settings
         blur_enabled = settings.get('blur_enabled', True)

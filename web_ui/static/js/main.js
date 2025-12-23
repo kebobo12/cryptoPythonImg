@@ -12,6 +12,9 @@ let previewDebounceTimer = null;
 let previewInProgress = false;
 const DEBOUNCE_DELAY = 200; // milliseconds
 
+// Asset selection state
+let currentGameAssets = null;
+
 // DOM Elements
 const modeBtns = document.querySelectorAll('.mode-btn');
 const singleMode = document.getElementById('single-mode');
@@ -75,6 +78,16 @@ const textScale = document.getElementById('text-scale');
 const textScaleValue = document.getElementById('text-scale-value');
 const textOffset = document.getElementById('text-offset');
 const textOffsetValue = document.getElementById('text-offset-value');
+
+// Asset selection elements
+const backgroundSelect = document.getElementById('background-select');
+const backgroundSelectGroup = document.getElementById('background-select-group');
+const characterSelect = document.getElementById('character-select');
+const characterSelectGroup = document.getElementById('character-select-group');
+const titleSelect = document.getElementById('title-select');
+const titleSelectGroup = document.getElementById('title-select-group');
+const logoSelect = document.getElementById('logo-select');
+const logoSelectGroup = document.getElementById('logo-select-group');
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
@@ -141,12 +154,18 @@ function setupEventListeners() {
         });
     }
 
-    // Title/provider mode radios - add live preview
+    // Title/provider mode radios - add live preview and toggle asset selectors
     document.querySelectorAll('input[name="title-mode"]').forEach(radio => {
-        radio.addEventListener('change', debouncedPreview);
+        radio.addEventListener('change', () => {
+            updateAssetSelectorVisibility();
+            debouncedPreview();
+        });
     });
     document.querySelectorAll('input[name="provider-mode"]').forEach(radio => {
-        radio.addEventListener('change', debouncedPreview);
+        radio.addEventListener('change', () => {
+            updateAssetSelectorVisibility();
+            debouncedPreview();
+        });
     });
 
     // Font controls
@@ -158,6 +177,20 @@ function setupEventListeners() {
         fontSelect.addEventListener('change', debouncedPreview);
     }
     bulkCustomFontEnabled.addEventListener('change', toggleBulkFontSelect);
+
+    // Asset selection controls - trigger live preview on change
+    if (backgroundSelect) {
+        backgroundSelect.addEventListener('change', debouncedPreview);
+    }
+    if (characterSelect) {
+        characterSelect.addEventListener('change', debouncedPreview);
+    }
+    if (titleSelect) {
+        titleSelect.addEventListener('change', debouncedPreview);
+    }
+    if (logoSelect) {
+        logoSelect.addEventListener('change', debouncedPreview);
+    }
 
     // Bulk blur controls
     bulkBlurEnabled.addEventListener('change', toggleBulkBlurOptions);
@@ -194,10 +227,12 @@ function setupEventListeners() {
         });
     }
 
-    // Close modal on Escape key
+    // Close modals on Escape key
     document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && providerFontModal && providerFontModal.style.display === 'flex') {
-            closeProviderFontModal();
+        if (e.key === 'Escape') {
+            if (providerFontModal && providerFontModal.style.display === 'flex') {
+                closeProviderFontModal();
+            }
         }
     });
 }
@@ -428,6 +463,9 @@ function onGameSelect() {
         gameInfo.style.display = 'block';
         generateBtn.disabled = false;
 
+        // Load available assets for this game
+        loadGameAssets(selectedGamePath);
+
         // Trigger initial live preview
         updateLivePreview();
     } else {
@@ -435,6 +473,94 @@ function onGameSelect() {
         generateBtn.disabled = true;
         previewContainer.style.display = 'none';
     }
+}
+
+// Load Game Assets
+async function loadGameAssets(gamePath) {
+    try {
+        const response = await fetch(`/api/game/${gamePath}/assets`);
+        const data = await response.json();
+
+        if (data.success) {
+            currentGameAssets = data.assets;
+            populateAssetSelectors();
+        } else {
+            console.error('Failed to load game assets:', data.error);
+        }
+    } catch (error) {
+        console.error('Failed to load game assets:', error);
+    }
+}
+
+// Populate Asset Selectors
+function populateAssetSelectors() {
+    if (!currentGameAssets) return;
+
+    // Populate background selector
+    if (currentGameAssets.backgrounds && currentGameAssets.backgrounds.length > 0) {
+        backgroundSelect.innerHTML = currentGameAssets.backgrounds.map(bg =>
+            `<option value="${bg}">${bg}</option>`
+        ).join('');
+        // Ensure first option is selected
+        backgroundSelect.selectedIndex = 0;
+        backgroundSelectGroup.style.display = 'block';
+    } else {
+        backgroundSelect.innerHTML = '';
+        backgroundSelectGroup.style.display = 'none';
+    }
+
+    // Populate character selector (single selection dropdown)
+    if (currentGameAssets.characters && currentGameAssets.characters.length > 0) {
+        characterSelect.innerHTML = currentGameAssets.characters.map(char =>
+            `<option value="${char}">${char}</option>`
+        ).join('');
+        // Ensure first option is selected
+        characterSelect.selectedIndex = 0;
+        characterSelectGroup.style.display = 'block';
+    } else {
+        characterSelect.innerHTML = '';
+        characterSelectGroup.style.display = 'none';
+    }
+
+    // Populate title selector
+    if (currentGameAssets.titles && currentGameAssets.titles.length > 0) {
+        titleSelect.innerHTML = currentGameAssets.titles.map(title =>
+            `<option value="${title}">${title}</option>`
+        ).join('');
+        // Ensure first option is selected
+        titleSelect.selectedIndex = 0;
+    } else {
+        titleSelect.innerHTML = '';
+    }
+
+    // Populate logo selector
+    if (currentGameAssets.logos && currentGameAssets.logos.length > 0) {
+        logoSelect.innerHTML = currentGameAssets.logos.map(logo =>
+            `<option value="${logo}">${logo}</option>`
+        ).join('');
+        // Ensure first option is selected
+        logoSelect.selectedIndex = 0;
+    } else {
+        logoSelect.innerHTML = '';
+    }
+
+    // Update visibility based on mode and available assets
+    updateAssetSelectorVisibility();
+}
+
+// Update visibility of asset selectors based on mode and available options
+function updateAssetSelectorVisibility() {
+    if (!currentGameAssets) return;
+
+    // Title selector - show only if in image mode AND multiple titles available
+    const titleMode = document.querySelector('input[name="title-mode"]:checked')?.value;
+    const hasTitles = currentGameAssets.titles && currentGameAssets.titles.length > 1;
+    titleSelectGroup.style.display = (titleMode === 'image' && hasTitles) ? 'block' : 'none';
+
+    // Logo selector - show only if in logo mode AND multiple logos available
+    const providerMode = document.querySelector('input[name="provider-mode"]:checked')?.value;
+    const hasLogos = currentGameAssets.logos && currentGameAssets.logos.length > 1;
+    logoSelectGroup.style.display = (providerMode === 'logo' && hasLogos) ? 'block' : 'none';
 }
 
 // Blur Options Toggle
@@ -514,6 +640,36 @@ function getSettings() {
     }
     // Don't send custom_font at all if checkbox is unchecked or no font selected
     // This allows provider defaults to apply
+
+    // Asset selections
+    if (currentGameAssets) {
+        const asset_filenames = {};
+
+        // Background selection
+        if (backgroundSelect.value) {
+            asset_filenames.background = backgroundSelect.value;
+        }
+
+        // Character selection (single dropdown)
+        if (characterSelect.value) {
+            asset_filenames.characters = [characterSelect.value];
+        }
+
+        // Title selection
+        if (titleSelect.value) {
+            asset_filenames.title = titleSelect.value;
+        }
+
+        // Logo selection
+        if (logoSelect.value) {
+            asset_filenames.logo = logoSelect.value;
+        }
+
+        // Only include asset_filenames if any selections were made
+        if (Object.keys(asset_filenames).length > 0) {
+            settings.asset_filenames = asset_filenames;
+        }
+    }
 
     console.log('Settings being sent:', settings);
     return settings;
@@ -661,6 +817,10 @@ function populateBulkGamesList() {
         const div = document.createElement('div');
         div.className = 'game-checkbox';
 
+        // Checkbox and label container
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'game-checkbox-content';
+
         const checkbox = document.createElement('input');
         checkbox.type = 'checkbox';
         checkbox.id = `bulk-game-${game.path}`;
@@ -672,8 +832,20 @@ function populateBulkGamesList() {
         label.htmlFor = `bulk-game-${game.path}`;
         label.innerHTML = `<span class="game-provider">[${game.provider}]</span> ${game.name}`;
 
-        div.appendChild(checkbox);
-        div.appendChild(label);
+        contentDiv.appendChild(checkbox);
+        contentDiv.appendChild(label);
+
+        // Edit button
+        const editBtn = document.createElement('button');
+        editBtn.className = 'edit-game-btn';
+        editBtn.textContent = 'Edit';
+        editBtn.onclick = (e) => {
+            e.stopPropagation(); // Prevent checkbox toggle
+            switchToSingleModeWithGame(game);
+        };
+
+        div.appendChild(contentDiv);
+        div.appendChild(editBtn);
         bulkGamesList.appendChild(div);
     });
 
@@ -753,6 +925,26 @@ async function generateBulkThumbnails() {
     }
 }
 
+// Switch to single mode with game selected
+function switchToSingleModeWithGame(game) {
+    // Switch to single mode
+    switchMode('single');
+
+    // Find and select the game in the dropdown
+    gameSelect.value = game.path;
+
+    // Trigger game selection
+    onGameSelect();
+
+    // Scroll to preview after a short delay (wait for preview to render)
+    setTimeout(() => {
+        const previewContainer = document.getElementById('preview-container');
+        if (previewContainer && previewContainer.style.display !== 'none') {
+            previewContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    }, 300);
+}
+
 // Utility Functions
 function showStatus(type, message, element) {
     element.className = `status ${type}`;
@@ -784,3 +976,4 @@ function getContrastColor(hexColor) {
     const brightness = (rgb[0] * 299 + rgb[1] * 587 + rgb[2] * 114) / 1000;
     return brightness > 128 ? '#000000' : '#ffffff';
 }
+// Cache bust 5 - reset dropdown selections on game switch

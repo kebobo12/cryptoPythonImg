@@ -194,6 +194,12 @@
                             <span>Use title image</span>
                         </label>
                     </div>
+
+                    <div class="control-group" id="title-select-group" style="display: none;">
+                        <label for="title-select">Title Image:</label>
+                        <select id="title-select" class="select-input">
+                        </select>
+                    </div>
                 </div>
 
                 <div class="section">
@@ -212,6 +218,12 @@
                             <span>Use provider logo</span>
                         </label>
                     </div>
+
+                    <div class="control-group" id="logo-select-group" style="display: none;">
+                        <label for="logo-select">Provider Logo:</label>
+                        <select id="logo-select" class="select-input">
+                        </select>
+                    </div>
                 </div>
 
                 <div id="preview-container" class="preview-container" style="display: none;">
@@ -221,7 +233,22 @@
                 </div>
 
                 <div class="section">
-                    <h2>Advanced Text & Blur</h2>
+                    <h2>Advanced Settings</h2>
+
+                    <!-- Asset Selectors -->
+                    <div class="control-group" id="background-select-group" style="display: none;">
+                        <label for="background-select">Background:</label>
+                        <select id="background-select" class="select-input">
+                        </select>
+                    </div>
+
+                    <div class="control-group" id="character-select-group" style="display: none;">
+                        <label for="character-select">Character:</label>
+                        <select id="character-select" class="select-input">
+                        </select>
+                    </div>
+
+                    <!-- Sliders -->
                     <div class="control-group">
                         <label for="text-scale" class="slider-label">Text Size</label>
                         <input type="range" id="text-scale" min="0.8" max="1.2" step="0.02" value="1" class="slider">
@@ -296,3 +323,4 @@
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>
 </html>
+<!-- Cache bust -->

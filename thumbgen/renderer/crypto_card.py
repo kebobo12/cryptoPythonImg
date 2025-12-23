@@ -94,6 +94,9 @@ def render_crypto_card(
     provider_logo=None,
     title_image=None,
     blur_enabled=True,
+    blur_scale: float = 1.0,
+    text_scale: float = 1.0,
+    text_offset: float = 0.0,
 ):
 
     canvas = crypto_blur_background(background)
@@ -167,6 +170,9 @@ def render_crypto_card(
 
             r, g, b = detected_color
 
+        # Apply blur_scale to intensities (clamped)
+        intensity_scale = max(0.3, min(2.0, blur_scale))
+
         # Small ellipse (solid core - almost edge to edge, flatter)
         SMALL_ARC_W = int(CANVAS_W * 1.15)
         SMALL_ARC_H = int(CANVAS_H * 0.315)  # 10% flatter (0.35 * 0.9)
@@ -195,29 +201,29 @@ def render_crypto_card(
         # Layer 1: Solid core (small ellipse) - more opaque
         core_layer = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
         core_draw = ImageDraw.Draw(core_layer)
-        core_draw.pieslice(small_bbox, 180, 360, fill=(r, g, b, 255))
+        core_draw.pieslice(small_bbox, 180, 360, fill=(r, g, b, int(255 * intensity_scale)))
         core_blurred = core_layer.filter(ImageFilter.GaussianBlur(25))
         gradient_overlay = Image.alpha_composite(gradient_overlay, core_blurred)
 
         # Layer 2: Medium fade - more pronounced bleed
         mid_layer = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
         mid_draw = ImageDraw.Draw(mid_layer)
-        mid_draw.pieslice(large_bbox, 180, 360, fill=(r, g, b, 220))
+        mid_draw.pieslice(large_bbox, 180, 360, fill=(r, g, b, int(220 * intensity_scale)))
         mid_blurred = mid_layer.filter(ImageFilter.GaussianBlur(80))  # Increased from 50
         gradient_overlay = Image.alpha_composite(gradient_overlay, mid_blurred)
 
         # Layer 3: Outer fade - stronger color with bleed
         outer_layer = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
         outer_draw = ImageDraw.Draw(outer_layer)
-        outer_draw.pieslice(large_bbox, 180, 360, fill=(r, g, b, 240))  # Increased from 200
+        outer_draw.pieslice(large_bbox, 180, 360, fill=(r, g, b, int(240 * intensity_scale)))  # Increased from 200
         outer_blurred = outer_layer.filter(ImageFilter.GaussianBlur(140))
         gradient_overlay = Image.alpha_composite(gradient_overlay, outer_blurred)
 
         # Composite onto canvas
         canvas = Image.alpha_composite(canvas, gradient_overlay)
 
-        # ---------------------------------------------------------
-    # TEXT BLOCK (title + provider) — MATCH BIG BASS OUTPUT
+    # ---------------------------------------------------------
+    # TEXT BLOCK (title + provider)
     # ---------------------------------------------------------
     text_area_start = int(CANVAS_H * 0.68)
     text_area_end   = int(CANVAS_H * 0.95)
@@ -225,8 +231,8 @@ def render_crypto_card(
     available_width  = int(CANVAS_W * 0.92)
 
     # Initial ratios
-    title_ratio    = 0.15
-    provider_ratio = 0.048
+    title_ratio    = 0.15 * text_scale
+    provider_ratio = 0.045 * text_scale
     min_gap = int(CANVAS_H * 0.04)
 
     # Reserve space for provider if present
@@ -335,32 +341,16 @@ def render_crypto_card(
         # Use title image with dynamic positioning based on provider height
         from .title_image import render_title_image
         canvas = render_title_image(canvas, title_image, scale=1.0, provider_height=prov_h if provider else 0)
-
-        # If there's a provider, we need to calculate where it goes relative to the title image
-        if provider:
-            # The title_image renderer centers both, so we need to recalculate provider Y
-            # Get the actual image dimensions after scaling
-            available_width = int(CANVAS_W * 0.92)
-            available_height_constraint = int(CANVAS_H * 0.27)
-
-            orig_width, orig_height = title_image.size
-            width_scale = available_width / orig_width
-            height_scale = available_height_constraint / orig_height
-            final_scale = min(width_scale, height_scale)
-
-            new_height = int(orig_height * final_scale)
-
-            # Calculate where title starts and provider should go
-            total_h = new_height + min_gap + prov_h
-            title_y_actual = text_area_start + (available_height - total_h) // 2
-            prov_y = title_y_actual + new_height + min_gap
     else:
         # Use text title
         draw_text_block(canvas, title_data, title_y, (255, 255, 255, 255))
 
     # Draw provider (if exists)
     if provider:
-        draw_text_block(canvas, prov_data, prov_y, (255, 255, 255, 235))
+        # Apply optional vertical offset (text_offset is ratio of canvas height)
+        prov_y_with_offset = prov_y + int(text_offset * CANVAS_H)
+        title_y = title_y + int(text_offset * CANVAS_H)
+        draw_text_block(canvas, prov_data, prov_y_with_offset, (255, 255, 255, 235))
 
     # ---------------------------------------------------------
     # PROVIDER LOGO (if enabled)
