@@ -109,10 +109,10 @@
                     </div>
 
                     <div class="control-group">
-                        <h3>Provider Default Fonts</h3>
-                        <p class="help-text">Set default fonts for each provider</p>
+                        <h3>Font Settings</h3>
+                        <p class="help-text">Manage default fonts for titles and providers</p>
                         <button id="open-provider-font-modal" class="btn btn-secondary">
-                            Manage Provider Fonts...
+                            Font Settings...
                         </button>
                     </div>
                 </div>
@@ -135,8 +135,11 @@
             <div id="single-mode" class="mode-content">
                 <div class="section">
                     <h2>Select Game</h2>
+                    <div class="search-box">
+                        <input type="text" id="game-search" class="search-input" placeholder="Search games...">
+                    </div>
                     <div class="game-selector">
-                        <select id="game-select" class="select-input">
+                        <select id="game-select" class="select-input" size="8">
                             <option value="">Choose a game...</option>
                         </select>
                     </div>
@@ -285,6 +288,9 @@
                     <button id="generate-btn" class="btn btn-primary" disabled>
                         Generate Thumbnail
                     </button>
+                    <button id="open-output-btn" class="btn btn-secondary">
+                        Open Output Folder
+                    </button>
                 </div>
 
                 <div id="single-status" class="status"></div>
@@ -292,29 +298,49 @@
         </div>
     </div>
 
-    <!-- Provider Fonts Modal -->
+    <!-- Font Settings Modal -->
     <div id="provider-font-modal" class="modal-backdrop" style="display: none;">
         <div class="modal">
             <div class="modal-header">
-                <h2>Provider Default Fonts</h2>
+                <h2>Font Settings</h2>
                 <button id="close-provider-font-modal" class="modal-close">&times;</button>
             </div>
             <div class="modal-body">
-                <p class="help-text">
-                    Select a provider and font to set a default. These fonts will be used automatically
-                    when no custom font is selected.
-                </p>
-                <div class="provider-font-manager">
-                    <div class="provider-font-row">
-                        <select id="provider-font-provider" class="select-input">
-                            <option value="">Select provider...</option>
+                <!-- Default Title Font Section -->
+                <div class="modal-section">
+                    <h3>Default Title Font</h3>
+                    <p class="help-text">
+                        Set the system-wide default font for all title text (currently: AMA Regular)
+                    </p>
+                    <div class="default-font-selector">
+                        <select id="default-font-select" class="select-input">
+                            <option value="">Loading fonts...</option>
                         </select>
-                        <select id="provider-font-select" class="select-input">
-                            <option value="">Select default font...</option>
-                        </select>
-                        <button id="save-provider-font-btn" class="btn btn-secondary">Save</button>
+                        <button id="save-default-font-btn" class="btn btn-secondary">
+                            Set as Default
+                        </button>
                     </div>
-                    <div id="provider-fonts-list" class="provider-fonts-list"></div>
+                    <div id="default-font-status" class="help-text" style="margin-top: 8px; color: #10b981;"></div>
+                </div>
+
+                <!-- Provider Fonts Section -->
+                <div class="modal-section">
+                    <h3>Provider Fonts</h3>
+                    <p class="help-text">
+                        Set default fonts for provider text (the small text at the bottom of thumbnails)
+                    </p>
+                    <div class="provider-font-manager">
+                        <div class="provider-font-row">
+                            <select id="provider-font-provider" class="select-input">
+                                <option value="">Select provider...</option>
+                            </select>
+                            <select id="provider-font-select" class="select-input">
+                                <option value="">Select default font...</option>
+                            </select>
+                            <button id="save-provider-font-btn" class="btn btn-secondary">Save</button>
+                        </div>
+                        <div id="provider-fonts-list" class="provider-fonts-list"></div>
+                    </div>
                 </div>
             </div>
         </div>

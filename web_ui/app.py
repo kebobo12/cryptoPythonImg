@@ -6,6 +6,9 @@ Modern, responsive web interface for generating game thumbnails
 import sys
 import json
 import webbrowser
+import subprocess
+import platform
+import os
 from pathlib import Path
 from threading import Timer, Lock
 from flask import Flask, render_template, request, jsonify, send_file
@@ -161,6 +164,29 @@ def get_games():
 
         return jsonify({'success': True, 'games': games})
 
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/open-output')
+def open_output_folder():
+    """Open the output folder in file explorer."""
+    try:
+        output_path = OUTPUT_DIR.resolve()
+
+        # Create output folder if it doesn't exist
+        output_path.mkdir(parents=True, exist_ok=True)
+
+        # Open folder based on OS
+        system = platform.system()
+        if system == 'Windows':
+            os.startfile(output_path)
+        elif system == 'Darwin':  # macOS
+            subprocess.run(['open', str(output_path)])
+        else:  # Linux and others
+            subprocess.run(['xdg-open', str(output_path)])
+
+        return jsonify({'success': True})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
@@ -593,6 +619,92 @@ def delete_provider_font(provider):
             return jsonify({'success': False, 'error': 'Failed to save provider fonts'}), 500
 
     except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/default-font', methods=['GET'])
+def get_default_font():
+    """Get the current default title font."""
+    try:
+        from thumbgen.constants import DEFAULT_FONT_PATH
+        # Extract just the font filename for display
+        font_name = Path(DEFAULT_FONT_PATH).name
+        return jsonify({
+            'success': True,
+            'font_path': DEFAULT_FONT_PATH,
+            'font_name': font_name
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/default-font', methods=['POST'])
+def set_default_font():
+    """Set the default title font by updating constants.py."""
+    try:
+        data = request.json
+        font_path = data.get('font_path')
+
+        if not font_path:
+            return jsonify({'success': False, 'error': 'Font path is required'}), 400
+
+        # Get absolute font path
+        if not Path(font_path).is_absolute():
+            font_path = str((Path(__file__).parent.parent / font_path).resolve())
+
+        # Verify font file exists
+        if not Path(font_path).exists():
+            return jsonify({'success': False, 'error': 'Font file not found'}), 404
+
+        # Update constants.py
+        constants_file = Path(__file__).parent.parent / 'thumbgen' / 'constants.py'
+
+        with open(constants_file, 'r', encoding='utf-8') as f:
+            content = f.read()
+
+        # Find and replace the DEFAULT_FONT_PATH line
+        # Convert absolute path to relative from project root
+        project_root = Path(__file__).parent.parent
+        try:
+            rel_path = Path(font_path).relative_to(project_root)
+            font_path_str = str(rel_path).replace('\\', '/')
+        except ValueError:
+            # If not relative to project root, use absolute path
+            font_path_str = str(Path(font_path)).replace('\\', '/')
+
+        # Replace the DEFAULT_FONT_PATH line
+        import re
+        pattern = r'DEFAULT_FONT_PATH:\s*str\s*=\s*str\(_project_root\s*/\s*"[^"]+"\)'
+        replacement = f'DEFAULT_FONT_PATH: str = str(_project_root / "{font_path_str}")'
+
+        new_content = re.sub(pattern, replacement, content)
+
+        # Check if pattern was found (even if replacement is identical)
+        if not re.search(pattern, content):
+            return jsonify({'success': False, 'error': 'DEFAULT_FONT_PATH not found in constants.py'}), 500
+
+        # Write back to file (even if content is the same, this is a valid operation)
+        with open(constants_file, 'w', encoding='utf-8') as f:
+            f.write(new_content)
+
+        # Reload the constants module to apply changes immediately
+        import importlib
+        import thumbgen.constants
+        importlib.reload(thumbgen.constants)
+
+        # Update the global DEFAULT_FONT_PATH in this module
+        global DEFAULT_FONT_PATH
+        from thumbgen.constants import DEFAULT_FONT_PATH
+
+        font_name = Path(font_path).name
+        return jsonify({
+            'success': True,
+            'message': f'Default font set to {font_name} and applied immediately!'
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
 
 

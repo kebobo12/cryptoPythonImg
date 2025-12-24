@@ -20,6 +20,8 @@ const modeBtns = document.querySelectorAll('.mode-btn');
 const singleMode = document.getElementById('single-mode');
 const bulkMode = document.getElementById('bulk-mode');
 const gameSelect = document.getElementById('game-select');
+const gameSearch = document.getElementById('game-search');
+const openOutputBtn = document.getElementById('open-output-btn');
 const gameInfo = document.getElementById('game-info');
 const providerName = document.getElementById('provider-name');
 const gameName = document.getElementById('game-name');
@@ -36,6 +38,11 @@ const fontSelect = document.getElementById('font-select');
 const bulkCustomFontEnabled = document.getElementById('bulk-custom-font-enabled');
 const bulkFontSelectContainer = document.getElementById('bulk-font-select-container');
 const bulkFontSelect = document.getElementById('bulk-font-select');
+
+// Default font controls
+const defaultFontSelect = document.getElementById('default-font-select');
+const saveDefaultFontBtn = document.getElementById('save-default-font-btn');
+const defaultFontStatus = document.getElementById('default-font-status');
 
 // Blur controls
 const blurEnabled = document.getElementById('blur-enabled');
@@ -117,6 +124,16 @@ function setupEventListeners() {
 
     // Game selection
     gameSelect.addEventListener('change', onGameSelect);
+
+    // Search functionality
+    if (gameSearch) {
+        gameSearch.addEventListener('input', filterGames);
+    }
+
+    // Open output folder button
+    if (openOutputBtn) {
+        openOutputBtn.addEventListener('click', openOutputFolder);
+    }
 
     // Blur controls
     blurEnabled.addEventListener('change', () => {
@@ -216,6 +233,11 @@ function setupEventListeners() {
     }
     if (closeProviderFontModalBtn) {
         closeProviderFontModalBtn.addEventListener('click', closeProviderFontModal);
+    }
+
+    // Default font management
+    if (saveDefaultFontBtn) {
+        saveDefaultFontBtn.addEventListener('click', saveDefaultFont);
     }
 
     // Close modal when clicking outside content
@@ -319,6 +341,15 @@ function populateFontSelects() {
 
     fontSelect.innerHTML = options;
     bulkFontSelect.innerHTML = options;
+
+    // Populate default font selector (no "Use default" option)
+    const defaultOptions = allFonts.map(font =>
+        `<option value="${font.path}">[${font.family}] ${font.name}</option>`
+    ).join('');
+    defaultFontSelect.innerHTML = defaultOptions;
+
+    // Load current default font
+    loadCurrentDefaultFont();
 }
 
 // Populate Provider Font Selects (for management)
@@ -440,6 +471,77 @@ async function removeProviderFont(provider) {
     }
 }
 
+// Load Current Default Font
+async function loadCurrentDefaultFont() {
+    try {
+        const response = await fetch('/api/default-font');
+        const data = await response.json();
+
+        if (data.success) {
+            // Select the current default font in the dropdown
+            const option = Array.from(defaultFontSelect.options).find(opt =>
+                opt.value.includes(data.font_name)
+            );
+            if (option) {
+                defaultFontSelect.value = option.value;
+            }
+            // Update the help text in the modal
+            const helpText = defaultFontSelect.closest('.modal-section')?.querySelector('.help-text');
+            if (helpText) {
+                helpText.textContent = `Set the system-wide default font for all title text (currently: ${data.font_name})`;
+            }
+        } else {
+            console.error('Failed to load default font:', data.error);
+        }
+    } catch (error) {
+        console.error('Failed to load default font:', error.message);
+    }
+}
+
+// Save Default Font
+async function saveDefaultFont() {
+    const fontPath = defaultFontSelect.value;
+
+    if (!fontPath) {
+        alert('Please select a font');
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/default-font', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ font_path: fontPath })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            defaultFontStatus.textContent = data.message;
+            defaultFontStatus.style.display = 'block';
+
+            // Update the help text in the modal
+            const selectedOption = defaultFontSelect.options[defaultFontSelect.selectedIndex];
+            const fontName = selectedOption.text.match(/\] (.+)$/)?.[1] || selectedOption.text;
+            const helpText = defaultFontSelect.closest('.modal-section')?.querySelector('.help-text');
+            if (helpText) {
+                helpText.textContent = `Set the system-wide default font for all title text (currently: ${fontName})`;
+            }
+
+            // Hide status after 5 seconds
+            setTimeout(() => {
+                defaultFontStatus.style.display = 'none';
+            }, 5000);
+        } else {
+            alert('Error: ' + data.error);
+        }
+    } catch (error) {
+        alert('Failed to save default font: ' + error.message);
+    }
+}
+
 // Populate Game Dropdown
 function populateGameSelect() {
     gameSelect.innerHTML = '<option value="">Choose a game...</option>';
@@ -452,8 +554,54 @@ function populateGameSelect() {
     });
 }
 
+// Filter Games by Search Query
+function filterGames() {
+    const searchQuery = gameSearch.value.toLowerCase().trim();
+
+    // Clear current options
+    gameSelect.innerHTML = '<option value="">Choose a game...</option>';
+
+    // Filter games
+    const filteredGames = allGames.filter(game => {
+        const gameName = game.name.toLowerCase();
+        const providerName = game.provider.toLowerCase();
+        const fullText = `${providerName} ${gameName}`;
+        return fullText.includes(searchQuery);
+    });
+
+    // Populate with filtered results
+    filteredGames.forEach(game => {
+        const option = document.createElement('option');
+        option.value = game.path;
+        option.textContent = `[${game.provider}] ${game.name}`;
+        gameSelect.appendChild(option);
+    });
+
+    // Show count
+    if (searchQuery && filteredGames.length === 0) {
+        const option = document.createElement('option');
+        option.disabled = true;
+        option.textContent = 'No games found';
+        gameSelect.appendChild(option);
+    }
+}
+
+// Open Output Folder
+async function openOutputFolder() {
+    try {
+        const response = await fetch('/api/open-output');
+        const data = await response.json();
+
+        if (!data.success) {
+            alert('Error: ' + data.error);
+        }
+    } catch (error) {
+        alert('Failed to open output folder: ' + error.message);
+    }
+}
+
 // Game Selection
-function onGameSelect() {
+async function onGameSelect() {
     selectedGamePath = gameSelect.value;
 
     if (selectedGamePath) {
@@ -463,10 +611,13 @@ function onGameSelect() {
         gameInfo.style.display = 'block';
         generateBtn.disabled = false;
 
-        // Load available assets for this game
-        loadGameAssets(selectedGamePath);
+        // Clear old asset data first to prevent sending wrong filenames
+        currentGameAssets = null;
 
-        // Trigger initial live preview
+        // Load available assets for this game and WAIT for completion
+        await loadGameAssets(selectedGamePath);
+
+        // Trigger initial live preview AFTER assets are loaded
         updateLivePreview();
     } else {
         gameInfo.style.display = 'none';
