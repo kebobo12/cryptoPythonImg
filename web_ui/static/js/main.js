@@ -22,6 +22,7 @@ const bulkMode = document.getElementById('bulk-mode');
 const gameSelect = document.getElementById('game-select');
 const gameSearch = document.getElementById('game-search');
 const openOutputBtn = document.getElementById('open-output-btn');
+const openOutputBulkBtn = document.getElementById('open-output-bulk-btn');
 const gameInfo = document.getElementById('game-info');
 const providerName = document.getElementById('provider-name');
 const gameName = document.getElementById('game-name');
@@ -40,9 +41,12 @@ const bulkFontSelectContainer = document.getElementById('bulk-font-select-contai
 const bulkFontSelect = document.getElementById('bulk-font-select');
 
 // Default font controls
-const defaultFontSelect = document.getElementById('default-font-select');
-const saveDefaultFontBtn = document.getElementById('save-default-font-btn');
+const allFontsList = document.getElementById('all-fonts-list');
 const defaultFontStatus = document.getElementById('default-font-status');
+
+// Provider modal font list
+const providerModalFontsList = document.getElementById('provider-modal-fonts-list');
+const providerModalFontStatus = document.getElementById('provider-modal-font-status');
 
 // Blur controls
 const blurEnabled = document.getElementById('blur-enabled');
@@ -71,7 +75,7 @@ const bulkBlurModeRadios = document.querySelectorAll('input[name="bulk-blur-mode
 const bulkColorPickerGroup = document.getElementById('bulk-color-picker-group');
 const bulkBlurColor = document.getElementById('bulk-blur-color');
 
-// Provider font management elements (modal)
+// Provider font management elements (standalone modal)
 const providerFontProvider = document.getElementById('provider-font-provider');
 const providerFontSelect = document.getElementById('provider-font-select');
 const saveProviderFontBtn = document.getElementById('save-provider-font-btn');
@@ -80,6 +84,12 @@ const openProviderFontModalBtn = document.getElementById('open-provider-font-mod
 const providerFontModal = document.getElementById('provider-font-modal');
 const closeProviderFontModalBtn = document.getElementById('close-provider-font-modal');
 
+// Provider font management elements (Manage Content modal - Fonts tab)
+const manageProviderFontProvider = document.getElementById('manage-provider-font-provider');
+const manageProviderFontSelect = document.getElementById('manage-provider-font-select');
+const manageSaveProviderFontBtn = document.getElementById('manage-save-provider-font-btn');
+const manageProviderFontsList = document.getElementById('manage-provider-fonts-list');
+
 // Advanced text controls (single)
 const textScale = document.getElementById('text-scale');
 const textScaleValue = document.getElementById('text-scale-value');
@@ -87,9 +97,9 @@ const textOffset = document.getElementById('text-offset');
 const textOffsetValue = document.getElementById('text-offset-value');
 
 // Asset selection elements
-const backgroundSelect = document.getElementById('background-select');
+const backgroundCheckboxes = document.getElementById('background-checkboxes');
 const backgroundSelectGroup = document.getElementById('background-select-group');
-const characterSelect = document.getElementById('character-select');
+const characterCheckboxes = document.getElementById('character-checkboxes');
 const characterSelectGroup = document.getElementById('character-select-group');
 const titleSelect = document.getElementById('title-select');
 const titleSelectGroup = document.getElementById('title-select-group');
@@ -102,6 +112,16 @@ document.addEventListener('DOMContentLoaded', () => {
     loadFonts();
     loadProviderFonts();
     setupEventListeners();
+
+    // Initialize mode based on current URL
+    initializeFromURL();
+
+    // Handle browser back/forward buttons
+    window.addEventListener('popstate', (event) => {
+        const path = window.location.pathname;
+        const mode = path === '/single' ? 'single' : 'bulk';
+        switchMode(mode, false); // Don't update history when responding to popstate
+    });
 
     // Initialize UI state
     toggleBlurOptions();
@@ -133,6 +153,11 @@ function setupEventListeners() {
     // Open output folder button
     if (openOutputBtn) {
         openOutputBtn.addEventListener('click', openOutputFolder);
+    }
+
+    // Open output folder button (bulk mode)
+    if (openOutputBulkBtn) {
+        openOutputBulkBtn.addEventListener('click', openOutputFolder);
     }
 
     // Blur controls
@@ -195,13 +220,8 @@ function setupEventListeners() {
     }
     bulkCustomFontEnabled.addEventListener('change', toggleBulkFontSelect);
 
-    // Asset selection controls - trigger live preview on change
-    if (backgroundSelect) {
-        backgroundSelect.addEventListener('change', debouncedPreview);
-    }
-    if (characterSelect) {
-        characterSelect.addEventListener('change', debouncedPreview);
-    }
+    // Asset selection controls - checkboxes will have change listeners added dynamically
+    // when populated
     if (titleSelect) {
         titleSelect.addEventListener('change', debouncedPreview);
     }
@@ -224,7 +244,7 @@ function setupEventListeners() {
     deselectAllBtn.addEventListener('click', deselectAllGames);
     providerFilter.addEventListener('change', onProviderFilterChange);
 
-    // Provider font management
+    // Provider font management (standalone modal)
     if (saveProviderFontBtn) {
         saveProviderFontBtn.addEventListener('click', saveProviderFont);
     }
@@ -235,10 +255,16 @@ function setupEventListeners() {
         closeProviderFontModalBtn.addEventListener('click', closeProviderFontModal);
     }
 
-    // Default font management
-    if (saveDefaultFontBtn) {
-        saveDefaultFontBtn.addEventListener('click', saveDefaultFont);
+    // Close provider font modal when clicking outside
+    if (providerFontModal) {
+        providerFontModal.addEventListener('click', (e) => {
+            if (e.target === providerFontModal) {
+                closeProviderFontModal();
+            }
+        });
     }
+
+    // Default font management - handled via onclick in font list items
 
     // Close modal when clicking outside content
     if (providerFontModal) {
@@ -259,8 +285,15 @@ function setupEventListeners() {
     });
 }
 
-// Mode Switching
-function switchMode(mode) {
+// Initialize mode from current URL
+function initializeFromURL() {
+    const path = window.location.pathname;
+    const mode = path === '/single' ? 'single' : 'bulk';
+    switchMode(mode, false); // Don't update history on initial load
+}
+
+// Mode Switching with client-side routing
+function switchMode(mode, updateHistory = true) {
     modeBtns.forEach(btn => {
         btn.classList.toggle('active', btn.dataset.mode === mode);
     });
@@ -268,11 +301,17 @@ function switchMode(mode) {
     if (mode === 'single') {
         singleMode.classList.add('active');
         bulkMode.classList.remove('active');
+        if (updateHistory) {
+            history.pushState({ mode: 'single' }, '', '/single');
+        }
     } else {
         singleMode.classList.remove('active');
         bulkMode.classList.add('active');
         if (allGames.length > 0) {
             populateBulkGamesList();
+        }
+        if (updateHistory) {
+            history.pushState({ mode: 'bulk' }, '', '/bulk');
         }
     }
 }
@@ -342,17 +381,11 @@ function populateFontSelects() {
     fontSelect.innerHTML = options;
     bulkFontSelect.innerHTML = options;
 
-    // Populate default font selector (no "Use default" option)
-    const defaultOptions = allFonts.map(font =>
-        `<option value="${font.path}">[${font.family}] ${font.name}</option>`
-    ).join('');
-    defaultFontSelect.innerHTML = defaultOptions;
-
-    // Load current default font
-    loadCurrentDefaultFont();
+    // Render the all fonts list
+    renderAllFontsList();
 }
 
-// Populate Provider Font Selects (for management)
+// Populate Provider Font Selects (for standalone Provider Font modal)
 function populateProviderFontSelects() {
     // Populate provider dropdown
     const providers = [...new Set(allGames.map(g => g.provider))].sort();
@@ -368,7 +401,103 @@ function populateProviderFontSelects() {
         ).join('');
 }
 
-// Render Provider Fonts List
+// Populate Provider Font Selects (for Manage Content modal - Fonts tab)
+function populateManageProviderFontSelects() {
+    if (!manageProviderFontProvider || !manageProviderFontSelect) return;
+
+    // Populate provider dropdown
+    const providers = [...new Set(allGames.map(g => g.provider))].sort();
+    manageProviderFontProvider.innerHTML = '<option value="">Select provider...</option>' +
+        providers.map(provider =>
+            `<option value="${provider}">${provider}</option>`
+        ).join('');
+
+    // Populate font dropdown
+    manageProviderFontSelect.innerHTML = '<option value="">Select default font...</option>' +
+        allFonts.map(font =>
+            `<option value="${font.path}">[${font.family}] ${font.name}</option>`
+        ).join('');
+}
+
+// Render All Fonts List
+async function renderAllFontsList() {
+    if (!allFontsList) return;
+
+    if (allFonts.length === 0) {
+        allFontsList.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 20px;">No fonts available. Upload fonts to get started.</p>';
+        return;
+    }
+
+    // Get current default font
+    let currentDefaultFont = null;
+    try {
+        const response = await fetch('/api/default-font');
+        const data = await response.json();
+        if (data.success) {
+            currentDefaultFont = data.font_name;
+        }
+    } catch (error) {
+        console.error('Failed to load default font:', error);
+    }
+
+    allFontsList.innerHTML = allFonts.map(font => {
+        const fontDisplayName = `[${font.family}] ${font.name}`;
+        const isDefault = currentDefaultFont && font.name.includes(currentDefaultFont);
+
+        return `
+            <div class="provider-font-item">
+                <div class="provider-font-info">
+                    <div class="provider-font-provider">${font.family}</div>
+                    <div class="provider-font-name">${font.name}${isDefault ? ' <strong style="color: #10b981;">(Default)</strong>' : ''}</div>
+                </div>
+                <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 14px;" onclick="setDefaultFont('${font.path}', '${font.name}')">
+                    ${isDefault ? 'Current Default' : 'Set as Default'}
+                </button>
+            </div>
+        `;
+    }).join('');
+}
+
+// Render Provider Modal Fonts List (for standalone Provider Font modal)
+async function renderProviderModalFontsList() {
+    if (!providerModalFontsList) return;
+
+    if (allFonts.length === 0) {
+        providerModalFontsList.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 20px;">No fonts available. Upload fonts to get started.</p>';
+        return;
+    }
+
+    // Get current default font
+    let currentDefaultFont = null;
+    try {
+        const response = await fetch('/api/default-font');
+        const data = await response.json();
+        if (data.success) {
+            currentDefaultFont = data.font_name;
+        }
+    } catch (error) {
+        console.error('Failed to load default font:', error);
+    }
+
+    providerModalFontsList.innerHTML = allFonts.map(font => {
+        const fontDisplayName = `[${font.family}] ${font.name}`;
+        const isDefault = currentDefaultFont && font.name.includes(currentDefaultFont);
+
+        return `
+            <div class="provider-font-item">
+                <div class="provider-font-info">
+                    <div class="provider-font-provider">${font.family}</div>
+                    <div class="provider-font-name">${font.name}${isDefault ? ' <strong style="color: #10b981;">(Default)</strong>' : ''}</div>
+                </div>
+                <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 14px;" onclick="setDefaultFontFromProviderModal('${font.path}', '${font.name}')">
+                    ${isDefault ? 'Current Default' : 'Set as Default'}
+                </button>
+            </div>
+        `;
+    }).join('');
+}
+
+// Render Provider Fonts List (for standalone Provider Font modal)
 function renderProviderFontsList() {
     if (!providerFontsList) return;
 
@@ -393,7 +522,32 @@ function renderProviderFontsList() {
     }).join('');
 }
 
-// Save Provider Font
+// Render Provider Fonts List (for Manage Content modal - Fonts tab)
+function renderManageProviderFontsList() {
+    if (!manageProviderFontsList) return;
+
+    if (Object.keys(providerFonts).length === 0) {
+        manageProviderFontsList.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 20px;">No provider fonts configured</p>';
+        return;
+    }
+
+    manageProviderFontsList.innerHTML = Object.entries(providerFonts).map(([provider, fontPath]) => {
+        const font = allFonts.find(f => f.path === fontPath);
+        const fontName = font ? `[${font.family}] ${font.name}` : fontPath;
+
+        return `
+            <div class="provider-font-item">
+                <div class="provider-font-info">
+                    <div class="provider-font-provider">${provider}</div>
+                    <div class="provider-font-name">${fontName}</div>
+                </div>
+                <button class="btn-remove" onclick="removeProviderFont('${provider}')">Remove</button>
+            </div>
+        `;
+    }).join('');
+}
+
+// Save Provider Font (for standalone Provider Font modal)
 async function saveProviderFont() {
     const provider = providerFontProvider.value;
     const fontPath = providerFontSelect.value;
@@ -436,9 +590,61 @@ async function saveProviderFont() {
     }
 }
 
-function openProviderFontModal() {
+// Save Provider Font (for Manage Content modal - Fonts tab)
+async function saveManageProviderFont() {
+    const provider = manageProviderFontProvider.value;
+    const fontPath = manageProviderFontSelect.value;
+
+    if (!provider) {
+        alert('Please select a provider');
+        return;
+    }
+
+    if (!fontPath) {
+        alert('Please select a font');
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/provider-fonts', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                provider: provider,
+                font_path: fontPath
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            providerFonts[provider] = fontPath;
+            renderManageProviderFontsList();
+            manageProviderFontProvider.value = '';
+            manageProviderFontSelect.value = '';
+            alert(data.message);
+        } else {
+            alert('Error: ' + data.error);
+        }
+    } catch (error) {
+        alert('Failed to save provider font: ' + error.message);
+    }
+}
+
+async function openProviderFontModal() {
     if (!providerFontModal) return;
     providerFontModal.style.display = 'flex';
+
+    // Populate the font list in the provider modal
+    await renderProviderModalFontsList();
+
+    // Populate the provider fonts section dropdowns
+    populateProviderFontSelects();
+
+    // Render the list of currently configured provider fonts
+    renderProviderFontsList();
 }
 
 function closeProviderFontModal() {
@@ -471,39 +677,9 @@ async function removeProviderFont(provider) {
     }
 }
 
-// Load Current Default Font
-async function loadCurrentDefaultFont() {
-    try {
-        const response = await fetch('/api/default-font');
-        const data = await response.json();
-
-        if (data.success) {
-            // Select the current default font in the dropdown
-            const option = Array.from(defaultFontSelect.options).find(opt =>
-                opt.value.includes(data.font_name)
-            );
-            if (option) {
-                defaultFontSelect.value = option.value;
-            }
-            // Update the help text in the modal
-            const helpText = defaultFontSelect.closest('.modal-section')?.querySelector('.help-text');
-            if (helpText) {
-                helpText.textContent = `Set the system-wide default font for all title text (currently: ${data.font_name})`;
-            }
-        } else {
-            console.error('Failed to load default font:', data.error);
-        }
-    } catch (error) {
-        console.error('Failed to load default font:', error.message);
-    }
-}
-
-// Save Default Font
-async function saveDefaultFont() {
-    const fontPath = defaultFontSelect.value;
-
+// Set Default Font (called from Manage Content modal font list)
+async function setDefaultFont(fontPath, fontName) {
     if (!fontPath) {
-        alert('Please select a font');
         return;
     }
 
@@ -519,26 +695,67 @@ async function saveDefaultFont() {
         const data = await response.json();
 
         if (data.success) {
-            defaultFontStatus.textContent = data.message;
+            defaultFontStatus.textContent = `Default font set to: ${fontName}`;
             defaultFontStatus.style.display = 'block';
+            defaultFontStatus.style.color = '#10b981';
 
-            // Update the help text in the modal
-            const selectedOption = defaultFontSelect.options[defaultFontSelect.selectedIndex];
-            const fontName = selectedOption.text.match(/\] (.+)$/)?.[1] || selectedOption.text;
-            const helpText = defaultFontSelect.closest('.modal-section')?.querySelector('.help-text');
-            if (helpText) {
-                helpText.textContent = `Set the system-wide default font for all title text (currently: ${fontName})`;
-            }
+            // Re-render the fonts list to update the UI
+            await renderAllFontsList();
 
-            // Hide status after 5 seconds
+            // Hide status after 3 seconds
             setTimeout(() => {
                 defaultFontStatus.style.display = 'none';
-            }, 5000);
+            }, 3000);
         } else {
-            alert('Error: ' + data.error);
+            defaultFontStatus.textContent = 'Error: ' + data.error;
+            defaultFontStatus.style.color = '#ef4444';
+            defaultFontStatus.style.display = 'block';
         }
     } catch (error) {
-        alert('Failed to save default font: ' + error.message);
+        defaultFontStatus.textContent = 'Failed to save: ' + error.message;
+        defaultFontStatus.style.color = '#ef4444';
+        defaultFontStatus.style.display = 'block';
+    }
+}
+
+// Set Default Font (called from Provider Font modal)
+async function setDefaultFontFromProviderModal(fontPath, fontName) {
+    if (!fontPath) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/default-font', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ font_path: fontPath })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            providerModalFontStatus.textContent = `Default font set to: ${fontName}`;
+            providerModalFontStatus.style.display = 'block';
+            providerModalFontStatus.style.color = '#10b981';
+
+            // Re-render the fonts list to update the UI
+            await renderProviderModalFontsList();
+
+            // Hide status after 3 seconds
+            setTimeout(() => {
+                providerModalFontStatus.style.display = 'none';
+            }, 3000);
+        } else {
+            providerModalFontStatus.textContent = 'Error: ' + data.error;
+            providerModalFontStatus.style.color = '#ef4444';
+            providerModalFontStatus.style.display = 'block';
+        }
+    } catch (error) {
+        providerModalFontStatus.textContent = 'Failed to save: ' + error.message;
+        providerModalFontStatus.style.color = '#ef4444';
+        providerModalFontStatus.style.display = 'block';
     }
 }
 
@@ -617,8 +834,13 @@ async function onGameSelect() {
         // Load available assets for this game and WAIT for completion
         await loadGameAssets(selectedGamePath);
 
-        // Trigger initial live preview AFTER assets are loaded
-        updateLivePreview();
+        // Trigger initial live preview AFTER assets are loaded (only if we have a background)
+        if (currentGameAssets && currentGameAssets.backgrounds && currentGameAssets.backgrounds.length > 0) {
+            await updateLivePreview();
+        } else {
+            // Hide preview if no assets
+            previewContainer.style.display = 'none';
+        }
     } else {
         gameInfo.style.display = 'none';
         generateBtn.disabled = true;
@@ -647,29 +869,39 @@ async function loadGameAssets(gamePath) {
 function populateAssetSelectors() {
     if (!currentGameAssets) return;
 
-    // Populate background selector
+    // Populate background radio buttons
     if (currentGameAssets.backgrounds && currentGameAssets.backgrounds.length > 0) {
-        backgroundSelect.innerHTML = currentGameAssets.backgrounds.map(bg =>
-            `<option value="${bg}">${bg}</option>`
+        backgroundCheckboxes.innerHTML = currentGameAssets.backgrounds.map((bg, index) =>
+            `<div class="asset-checkbox-item">
+                <input type="radio" name="background-choice" id="bg-${index}" value="${bg}" ${index === 0 ? 'checked' : ''}>
+                <label for="bg-${index}">${bg}</label>
+            </div>`
         ).join('');
-        // Ensure first option is selected
-        backgroundSelect.selectedIndex = 0;
+        // Add change listeners to all radio buttons
+        backgroundCheckboxes.querySelectorAll('input[type="radio"]').forEach(rb => {
+            rb.addEventListener('change', debouncedPreview);
+        });
         backgroundSelectGroup.style.display = 'block';
     } else {
-        backgroundSelect.innerHTML = '';
+        backgroundCheckboxes.innerHTML = '';
         backgroundSelectGroup.style.display = 'none';
     }
 
-    // Populate character selector (single selection dropdown)
+    // Populate character radio buttons
     if (currentGameAssets.characters && currentGameAssets.characters.length > 0) {
-        characterSelect.innerHTML = currentGameAssets.characters.map(char =>
-            `<option value="${char}">${char}</option>`
+        characterCheckboxes.innerHTML = currentGameAssets.characters.map((char, index) =>
+            `<div class="asset-checkbox-item">
+                <input type="radio" name="character-choice" id="char-${index}" value="${char}" ${index === 0 ? 'checked' : ''}>
+                <label for="char-${index}">${char}</label>
+            </div>`
         ).join('');
-        // Ensure first option is selected
-        characterSelect.selectedIndex = 0;
+        // Add change listeners to all radio buttons
+        characterCheckboxes.querySelectorAll('input[type="radio"]').forEach(rb => {
+            rb.addEventListener('change', debouncedPreview);
+        });
         characterSelectGroup.style.display = 'block';
     } else {
-        characterSelect.innerHTML = '';
+        characterCheckboxes.innerHTML = '';
         characterSelectGroup.style.display = 'none';
     }
 
@@ -796,14 +1028,16 @@ function getSettings() {
     if (currentGameAssets) {
         const asset_filenames = {};
 
-        // Background selection
-        if (backgroundSelect.value) {
-            asset_filenames.background = backgroundSelect.value;
+        // Background selection - get selected radio button
+        const selectedBackground = backgroundCheckboxes.querySelector('input[type="radio"]:checked');
+        if (selectedBackground) {
+            asset_filenames.background = selectedBackground.value;
         }
 
-        // Character selection (single dropdown)
-        if (characterSelect.value) {
-            asset_filenames.characters = [characterSelect.value];
+        // Character selection - get selected radio button
+        const selectedCharacter = characterCheckboxes.querySelector('input[type="radio"]:checked');
+        if (selectedCharacter) {
+            asset_filenames.characters = [selectedCharacter.value];
         }
 
         // Title selection
@@ -905,7 +1139,7 @@ async function generateThumbnail() {
     previewContainer.style.display = 'none';
 
     try {
-        const response = await fetch('/api/generate', {
+        const response = await fetch('/api/generate-single', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -1077,23 +1311,23 @@ async function generateBulkThumbnails() {
 }
 
 // Switch to single mode with game selected
-function switchToSingleModeWithGame(game) {
+async function switchToSingleModeWithGame(game) {
     // Switch to single mode
     switchMode('single');
 
     // Find and select the game in the dropdown
     gameSelect.value = game.path;
 
-    // Trigger game selection
-    onGameSelect();
+    // Trigger game selection and wait for it to complete
+    await onGameSelect();
 
-    // Scroll to preview after a short delay (wait for preview to render)
+    // Scroll to preview after assets load and preview renders
     setTimeout(() => {
         const previewContainer = document.getElementById('preview-container');
         if (previewContainer && previewContainer.style.display !== 'none') {
             previewContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
-    }, 300);
+    }, 100);
 }
 
 // Utility Functions
@@ -1127,4 +1361,718 @@ function getContrastColor(hexColor) {
     const brightness = (rgb[0] * 299 + rgb[1] * 587 + rgb[2] * 114) / 1000;
     return brightness > 128 ? '#000000' : '#ffffff';
 }
+
+// ===================================================
+// Asset Upload & Classification System
+// ===================================================
+
+// DOM elements shared with asset upload (in unified modal)
+const selectFilesBtn = document.getElementById('select-files-btn');
+const assetFilesInput = document.getElementById('asset-files-input');
+const dropZone = document.getElementById('drop-zone');
+const selectedFilesInfo = document.getElementById('selected-files-info');
+const uploadProgress = document.getElementById('upload-progress');
+const classificationResults = document.getElementById('classification-results');
+const classificationTableBody = document.getElementById('classification-table-body');
+const saveClassifiedAssetsBtn = document.getElementById('save-classified-assets-btn');
+const cancelUploadBtn = document.getElementById('cancel-upload-btn');
+const uploadStatus = document.getElementById('upload-status');
+
+let uploadedFiles = [];
+let classificationData = [];
+
+// Event Listeners for asset upload (now in unified modal)
+
+if (selectFilesBtn) {
+    selectFilesBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        assetFilesInput.click();
+    });
+}
+
+if (assetFilesInput) {
+    assetFilesInput.addEventListener('change', handleFileSelection);
+}
+
+// Drag and Drop handlers
+if (dropZone) {
+    dropZone.addEventListener('click', () => {
+        assetFilesInput.click();
+    });
+
+    dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropZone.classList.add('drag-over');
+    });
+
+    dropZone.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('drag-over');
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('drag-over');
+
+        const files = Array.from(e.dataTransfer.files).filter(file =>
+            file.type.startsWith('image/')
+        );
+
+        if (files.length > 0) {
+            handleDroppedFiles(files);
+        }
+    });
+}
+
+if (saveClassifiedAssetsBtn) {
+    saveClassifiedAssetsBtn.addEventListener('click', saveClassifiedAssets);
+}
+
+if (cancelUploadBtn) {
+    cancelUploadBtn.addEventListener('click', () => {
+        // Reset asset upload area in unified modal
+        assetFilesInput.value = '';
+        selectedFilesInfo.textContent = '';
+        uploadProgress.style.display = 'none';
+        classificationResults.style.display = 'none';
+        uploadStatus.textContent = '';
+        uploadedFiles = [];
+        classificationData = [];
+        classificationTableBody.innerHTML = '';
+    });
+}
+
+async function handleFileSelection(event) {
+    const files = Array.from(event.target.files);
+    if (files.length === 0) return;
+
+    await processFiles(files);
+}
+
+async function handleDroppedFiles(files) {
+    await processFiles(files);
+}
+
+async function processFiles(files) {
+    uploadedFiles = files;
+    selectedFilesInfo.textContent = `${files.length} file(s) selected`;
+
+    // Show progress, hide drop zone
+    uploadProgress.style.display = 'block';
+    classificationResults.style.display = 'none';
+
+    // Upload and analyze
+    await uploadAndAnalyzeAssets(files);
+}
+
+async function uploadAndAnalyzeAssets(files) {
+    try {
+        const formData = new FormData();
+        files.forEach(file => {
+            formData.append('files', file);
+        });
+
+        // Get game path from asset target selector (unified modal) or fallback to selected game
+        const targetGamePath = assetTargetGame.value || selectedGamePath;
+        if (!targetGamePath) {
+            uploadStatus.textContent = 'Error: No game selected';
+            uploadStatus.style.color = '#ef4444';
+            uploadProgress.style.display = 'none';
+            return;
+        }
+
+        // Extract provider path from selected game path
+        const pathParts = targetGamePath.split('/');
+        const providerPath = pathParts[0]; // First part is provider
+
+        formData.append('game_path', targetGamePath);
+        formData.append('provider_path', providerPath);
+
+        const response = await fetch('/api/upload-assets', {
+            method: 'POST',
+            body: formData
+        });
+
+        const data = await response.json();
+
+        if (!data.success) {
+            uploadStatus.textContent = 'Error: ' + data.error;
+            uploadStatus.style.color = '#ef4444';
+            uploadProgress.style.display = 'none';
+            return;
+        }
+
+        // Store classification data
+        classificationData = data.results;
+
+        // Hide progress, show results
+        uploadProgress.style.display = 'none';
+        classificationResults.style.display = 'block';
+
+        // Populate classification table
+        populateClassificationTable(data.results);
+
+    } catch (error) {
+        uploadStatus.textContent = 'Failed to upload: ' + error.message;
+        uploadStatus.style.color = '#ef4444';
+        uploadProgress.style.display = 'none';
+    }
+}
+
+function populateClassificationTable(results) {
+    classificationTableBody.innerHTML = '';
+
+    results.forEach((result, index) => {
+        const row = document.createElement('tr');
+
+        // Mark low confidence rows
+        if (result.requires_manual) {
+            row.style.backgroundColor = '#fef2f2';  // Light red
+        }
+
+        // Preview thumbnail
+        const previewCell = document.createElement('td');
+        if (result.thumbnail) {
+            const img = document.createElement('img');
+            img.src = result.thumbnail;
+            img.style.width = '60px';
+            img.style.height = '60px';
+            img.style.objectFit = 'contain';
+            previewCell.appendChild(img);
+        }
+        row.appendChild(previewCell);
+
+        // Filename
+        const filenameCell = document.createElement('td');
+        filenameCell.textContent = result.filename;
+        row.appendChild(filenameCell);
+
+        // Detected type
+        const typeCell = document.createElement('td');
+        typeCell.textContent = result.detected_type || 'Unknown';
+        if (result.requires_manual) {
+            typeCell.style.color = '#dc2626';
+            typeCell.style.fontWeight = 'bold';
+        }
+        row.appendChild(typeCell);
+
+        // Confidence
+        const confidenceCell = document.createElement('td');
+        if (result.success) {
+            confidenceCell.textContent = `${result.confidence.toFixed(0)}%`;
+            if (result.requires_manual) {
+                confidenceCell.style.color = '#dc2626';
+            }
+        } else {
+            confidenceCell.textContent = 'Error';
+            confidenceCell.style.color = '#dc2626';
+        }
+        row.appendChild(confidenceCell);
+
+        // Override dropdown
+        const overrideCell = document.createElement('td');
+        const select = document.createElement('select');
+        select.className = 'select-input';
+        select.dataset.index = index;
+
+        const options = [
+            { value: 'background', label: 'Background' },
+            { value: 'character', label: 'Character' },
+            { value: 'title', label: 'Title' },
+            { value: 'logo', label: 'Logo' }
+        ];
+
+        options.forEach(opt => {
+            const option = document.createElement('option');
+            option.value = opt.value;
+            option.textContent = opt.label;
+            if (opt.value === result.detected_type) {
+                option.selected = true;
+            }
+            select.appendChild(option);
+        });
+
+        select.addEventListener('change', (e) => {
+            classificationData[index].detected_type = e.target.value;
+            classificationData[index].requires_manual = false;
+            // Remove red highlighting
+            row.style.backgroundColor = '';
+            typeCell.style.color = '';
+            typeCell.style.fontWeight = '';
+            confidenceCell.style.color = '';
+        });
+
+        overrideCell.appendChild(select);
+        row.appendChild(overrideCell);
+
+        classificationTableBody.appendChild(row);
+    });
+}
+
+async function saveClassifiedAssets() {
+    // Check for items requiring manual classification
+    const unclassified = classificationData.filter(item =>
+        item.requires_manual && item.success
+    );
+
+    if (unclassified.length > 0) {
+        alert(`Please classify ${unclassified.length} item(s) manually before saving`);
+        return;
+    }
+
+    // Prepare classifications
+    const classifications = classificationData
+        .filter(item => item.success)
+        .map(item => ({
+            filename: item.filename,
+            temp_filename: item.temp_filename,
+            type: item.detected_type
+        }));
+
+    if (classifications.length === 0) {
+        alert('No valid assets to save');
+        return;
+    }
+
+    try {
+        saveClassifiedAssetsBtn.disabled = true;
+        uploadStatus.textContent = 'Saving assets...';
+        uploadStatus.style.color = '#3b82f6';
+
+        // Get game path from asset target selector (unified modal)
+        const targetGamePath = assetTargetGame.value || selectedGamePath;
+        if (!targetGamePath) {
+            alert('No game selected');
+            return;
+        }
+
+        // Extract provider path from selected game path
+        const pathParts = targetGamePath.split('/');
+        const providerPath = pathParts[0];
+
+        const response = await fetch('/api/save-classified-assets', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                game_path: targetGamePath,
+                provider_path: providerPath,
+                classifications: classifications
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            uploadStatus.textContent = data.message;
+            uploadStatus.style.color = '#10b981';
+
+            // Reset upload area after success
+            setTimeout(() => {
+                assetFilesInput.value = '';
+                selectedFilesInfo.textContent = '';
+                uploadProgress.style.display = 'none';
+                classificationResults.style.display = 'none';
+                uploadedFiles = [];
+                classificationData = [];
+                classificationTableBody.innerHTML = '';
+
+                // Refresh asset lists
+                loadGameAssets();
+            }, 2000);
+        } else {
+            uploadStatus.textContent = 'Error: ' + (data.errors ? data.errors.join(', ') : data.error);
+            uploadStatus.style.color = '#ef4444';
+        }
+
+    } catch (error) {
+        uploadStatus.textContent = 'Failed to save: ' + error.message;
+        uploadStatus.style.color = '#ef4444';
+    } finally {
+        saveClassifiedAssetsBtn.disabled = false;
+    }
+}
+
+// ===================================================
+// Create New Game System
+// ===================================================
+
+// DOM elements for create game modal
+// ==================== UNIFIED CONTENT MANAGEMENT MODAL ====================
+const manageContentBtn = document.getElementById('manage-content-btn');
+const manageContentBulkBtn = document.getElementById('manage-content-bulk-btn');
+const manageContentModal = document.getElementById('manage-content-modal');
+const closeManageContentModal = document.getElementById('close-manage-content-modal');
+
+// Tab buttons
+const tabButtons = document.querySelectorAll('.tab-button');
+const tabContents = document.querySelectorAll('.tab-content');
+
+// Games tab elements
+const newProviderSelect = document.getElementById('new-provider-select');
+const newProviderToggleBtn = document.getElementById('new-provider-toggle-btn');
+const newProviderInputGroup = document.getElementById('new-provider-input-group');
+const newProviderName = document.getElementById('new-provider-name');
+const newGameName = document.getElementById('new-game-name');
+const createGameSubmitBtn = document.getElementById('create-game-submit-btn');
+const createGameStatus = document.getElementById('create-game-status');
+
+// Assets tab elements
+const assetTargetGame = document.getElementById('asset-target-game');
+const assetUploadArea = document.getElementById('asset-upload-area');
+
+// Fonts tab elements
+const fontFilesInput = document.getElementById('font-files-input');
+const fontDropZone = document.getElementById('font-drop-zone');
+const selectFontsBtn = document.getElementById('select-fonts-btn');
+const selectedFontsInfo = document.getElementById('selected-fonts-info');
+const fontUploadStatus = document.getElementById('font-upload-status');
+
+let isCreatingNewProvider = false;
+let currentTab = 'games';
+
+// Event Listeners - Modal
+if (manageContentBtn) {
+    manageContentBtn.addEventListener('click', () => openManageContentModal('games'));
+}
+
+if (manageContentBulkBtn) {
+    manageContentBulkBtn.addEventListener('click', () => openManageContentModal('games'));
+}
+
+if (closeManageContentModal) {
+    closeManageContentModal.addEventListener('click', () => {
+        manageContentModal.style.display = 'none';
+        resetManageContentModal();
+    });
+}
+
+// Close manage content modal when clicking outside
+if (manageContentModal) {
+    manageContentModal.addEventListener('click', (e) => {
+        if (e.target === manageContentModal) {
+            manageContentModal.style.display = 'none';
+            resetManageContentModal();
+        }
+    });
+}
+
+// Provider font management in Manage Content modal
+if (manageSaveProviderFontBtn) {
+    manageSaveProviderFontBtn.addEventListener('click', saveManageProviderFont);
+}
+
+// Tab navigation
+tabButtons.forEach(button => {
+    button.addEventListener('click', () => {
+        const targetTab = button.getAttribute('data-tab');
+        switchTab(targetTab);
+    });
+});
+
+// Games tab listeners
+if (newProviderToggleBtn) {
+    newProviderToggleBtn.addEventListener('click', toggleNewProvider);
+}
+
+if (createGameSubmitBtn) {
+    createGameSubmitBtn.addEventListener('click', submitCreateGame);
+}
+
+// Assets tab listeners
+if (assetTargetGame) {
+    assetTargetGame.addEventListener('change', () => {
+        if (assetTargetGame.value) {
+            assetUploadArea.style.display = 'block';
+        } else {
+            assetUploadArea.style.display = 'none';
+        }
+    });
+}
+
+// Fonts tab listeners
+if (selectFontsBtn) {
+    selectFontsBtn.addEventListener('click', () => {
+        fontFilesInput.click();
+    });
+}
+
+if (fontFilesInput) {
+    fontFilesInput.addEventListener('change', handleFontFilesSelected);
+}
+
+if (fontDropZone) {
+    fontDropZone.addEventListener('click', () => {
+        fontFilesInput.click();
+    });
+
+    fontDropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        fontDropZone.classList.add('drag-over');
+    });
+
+    fontDropZone.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        fontDropZone.classList.remove('drag-over');
+    });
+
+    fontDropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        fontDropZone.classList.remove('drag-over');
+
+        const files = Array.from(e.dataTransfer.files).filter(file =>
+            file.name.endsWith('.ttf') || file.name.endsWith('.otf')
+        );
+
+        if (files.length > 0) {
+            handleDroppedFonts(files);
+        }
+    });
+}
+
+// ===== Modal Functions =====
+async function openManageContentModal(tab = 'games') {
+    manageContentModal.style.display = 'flex';
+    resetManageContentModal();
+    switchTab(tab);
+
+    // Load data for each tab
+    await loadProviders();
+    await loadGamesForAssetTab();
+    await loadFonts(); // For default font dropdown
+    await loadProviderFonts(); // For provider fonts
+
+    // Populate fonts list and provider font dropdowns/list in Fonts tab
+    await renderAllFontsList();
+    populateManageProviderFontSelects();
+    renderManageProviderFontsList();
+}
+
+function resetManageContentModal() {
+    // Reset games tab
+    newGameName.value = '';
+    newProviderName.value = '';
+    isCreatingNewProvider = false;
+    newProviderInputGroup.style.display = 'none';
+    newProviderToggleBtn.textContent = 'New Provider';
+    createGameStatus.textContent = '';
+
+    // Reset assets tab
+    assetTargetGame.value = '';
+    assetUploadArea.style.display = 'none';
+    selectedFilesInfo.textContent = '';
+    uploadProgress.style.display = 'none';
+    classificationResults.style.display = 'none';
+    classificationTableBody.innerHTML = '';
+
+    // Reset fonts tab
+    selectedFontsInfo.textContent = '';
+    fontUploadStatus.textContent = '';
+}
+
+function switchTab(tabName) {
+    currentTab = tabName;
+
+    // Update tab buttons
+    tabButtons.forEach(btn => {
+        if (btn.getAttribute('data-tab') === tabName) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
+
+    // Update tab content
+    tabContents.forEach(content => {
+        if (content.id === `tab-${tabName}`) {
+            content.classList.add('active');
+            content.style.display = 'block';
+        } else {
+            content.classList.remove('active');
+            content.style.display = 'none';
+        }
+    });
+}
+
+async function loadGamesForAssetTab() {
+    try {
+        const response = await fetch('/api/games');
+        const data = await response.json();
+
+        if (data.success && data.games) {
+            const options = data.games.map(game =>
+                `<option value="${game.path}">${game.provider} - ${game.name}</option>`
+            ).join('');
+            assetTargetGame.innerHTML = '<option value="">Select a game...</option>' + options;
+        }
+    } catch (error) {
+        console.error('Failed to load games for asset tab:', error);
+    }
+}
+
+function toggleNewProvider() {
+    isCreatingNewProvider = !isCreatingNewProvider;
+
+    if (isCreatingNewProvider) {
+        newProviderInputGroup.style.display = 'block';
+        newProviderSelect.disabled = true;
+        newProviderToggleBtn.textContent = 'Select Existing';
+    } else {
+        newProviderInputGroup.style.display = 'none';
+        newProviderSelect.disabled = false;
+        newProviderToggleBtn.textContent = 'New Provider';
+    }
+}
+
+async function loadProviders() {
+    try {
+        const response = await fetch('/api/providers');
+        const data = await response.json();
+
+        if (data.success) {
+            const options = data.providers.map(provider =>
+                `<option value="${provider}">${provider}</option>`
+            ).join('');
+            newProviderSelect.innerHTML = '<option value="">-- Select Provider --</option>' + options;
+        }
+    } catch (error) {
+        console.error('Failed to load providers:', error);
+        newProviderSelect.innerHTML = '<option value="">Error loading providers</option>';
+    }
+}
+
+async function submitCreateGame() {
+    const gameName = newGameName.value.trim();
+
+    if (!gameName) {
+        alert('Please enter a game name');
+        return;
+    }
+
+    let providerName;
+    if (isCreatingNewProvider) {
+        providerName = newProviderName.value.trim();
+        if (!providerName) {
+            alert('Please enter a provider name');
+            return;
+        }
+    } else {
+        providerName = newProviderSelect.value;
+        if (!providerName) {
+            alert('Please select a provider');
+            return;
+        }
+    }
+
+    try {
+        createGameSubmitBtn.disabled = true;
+        createGameStatus.textContent = 'Creating game...';
+        createGameStatus.style.color = '#3b82f6';
+
+        const response = await fetch('/api/create-game', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                provider: providerName,
+                game: gameName
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            createGameStatus.textContent = data.message;
+            createGameStatus.style.color = '#10b981';
+
+            // Refresh games list
+            setTimeout(async () => {
+                await loadGames();
+
+                // Auto-select the new game
+                if (data.game_path) {
+                    gameSelect.value = data.game_path;
+                    await onGameSelect();
+                }
+
+                // Switch to assets tab in unified modal
+                switchTab('assets');
+
+                // Auto-select the newly created game in assets tab
+                assetTargetGame.value = data.game_path;
+                assetUploadArea.style.display = 'block';
+            }, 1500);
+        } else {
+            createGameStatus.textContent = 'Error: ' + data.error;
+            createGameStatus.style.color = '#ef4444';
+        }
+
+    } catch (error) {
+        createGameStatus.textContent = 'Failed to create game: ' + error.message;
+        createGameStatus.style.color = '#ef4444';
+    } finally {
+        createGameSubmitBtn.disabled = false;
+    }
+}
+
+// ===== Font Upload Functions =====
+function handleFontFilesSelected(event) {
+    const files = Array.from(event.target.files);
+    if (files.length > 0) {
+        uploadFonts(files);
+    }
+}
+
+function handleDroppedFonts(files) {
+    uploadFonts(files);
+}
+
+async function uploadFonts(files) {
+    const formData = new FormData();
+    files.forEach(file => {
+        formData.append('files', file);
+    });
+
+    selectedFontsInfo.textContent = `Uploading ${files.length} font(s)...`;
+    selectedFontsInfo.style.color = '#3b82f6';
+    fontUploadStatus.textContent = '';
+
+    try {
+        const response = await fetch('/api/upload-fonts', {
+            method: 'POST',
+            body: formData
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            selectedFontsInfo.textContent = '';
+            fontUploadStatus.textContent = data.message;
+            fontUploadStatus.style.color = '#10b981';
+
+            // Reload font lists
+            await loadFonts();
+            await loadProviderFonts();
+
+            // Clear file input
+            fontFilesInput.value = '';
+
+            setTimeout(() => {
+                fontUploadStatus.textContent = '';
+            }, 3000);
+        } else {
+            fontUploadStatus.textContent = 'Error: ' + (data.error || 'Upload failed');
+            fontUploadStatus.style.color = '#ef4444';
+            selectedFontsInfo.textContent = '';
+        }
+    } catch (error) {
+        console.error('Font upload error:', error);
+        fontUploadStatus.textContent = 'Error: ' + error.message;
+        fontUploadStatus.style.color = '#ef4444';
+        selectedFontsInfo.textContent = '';
+    }
+}
+
 // Cache bust 5 - reset dropdown selections on game switch

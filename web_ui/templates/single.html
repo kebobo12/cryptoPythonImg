@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Thumbnail Generator</title>
+    <title>Thumbnail Generator - Single Game</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
@@ -14,131 +14,16 @@
             <p class="subtitle">Create stunning game thumbnails with ease</p>
         </header>
 
-        <!-- Mode Selector -->
+        <!-- Mode Navigation -->
         <div class="mode-selector">
-            <button class="mode-btn active" data-mode="bulk">Bulk Process</button>
-            <button class="mode-btn" data-mode="single">Single Game</button>
+            <a href="/bulk" class="mode-btn">Bulk Process</a>
+            <a href="/single" class="mode-btn active">Single Game</a>
         </div>
 
         <!-- Main Content -->
         <div class="content">
-            <!-- Bulk Mode -->
-            <div id="bulk-mode" class="mode-content active">
-                <div class="section">
-                    <h2>Select Games</h2>
-                    <div class="filter-controls">
-                        <label for="provider-filter">Filter by Provider:</label>
-                        <select id="provider-filter" class="select-input">
-                            <option value="">All Providers</option>
-                        </select>
-                    </div>
-                    <div class="bulk-controls">
-                        <button id="select-all-btn" class="btn btn-secondary">Select All</button>
-                        <button id="deselect-all-btn" class="btn btn-secondary">Deselect All</button>
-                    </div>
-
-                    <div id="bulk-games-list" class="games-list"></div>
-                </div>
-
-                <div class="section">
-                    <h2>Settings</h2>
-                    <div class="control-group">
-                        <label class="checkbox-label">
-                            <input type="checkbox" id="bulk-blur-enabled" checked>
-                            <span>Enable blur band</span>
-                        </label>
-
-                        <div id="bulk-blur-options" class="blur-options">
-                            <div class="radio-group">
-                                <label class="radio-label">
-                                    <input type="radio" name="bulk-blur-mode" value="auto" checked>
-                                    <span>Auto-detect from background</span>
-                                </label>
-                                <label class="radio-label">
-                                    <input type="radio" name="bulk-blur-mode" value="manual">
-                                    <span>Manual color selection</span>
-                                </label>
-                            </div>
-
-                            <div id="bulk-color-picker-group" class="color-picker-group" style="display: none;">
-                                <label for="bulk-blur-color">Blur Color:</label>
-                                <input type="color" id="bulk-blur-color" value="#000000">
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="radio-group">
-                        <h3>Title</h3>
-                        <label class="radio-label">
-                            <input type="radio" name="bulk-title-mode" value="text" checked>
-                            <span>Auto from folder name</span>
-                        </label>
-                        <label class="radio-label">
-                            <input type="radio" name="bulk-title-mode" value="image">
-                            <span>Use title image</span>
-                        </label>
-                    </div>
-
-                    <div class="radio-group">
-                        <h3>Provider</h3>
-                        <label class="radio-label">
-                            <input type="radio" name="bulk-provider-mode" value="none">
-                            <span>Don't show</span>
-                        </label>
-                        <label class="radio-label">
-                            <input type="radio" name="bulk-provider-mode" value="text" checked>
-                            <span>Auto from provider name</span>
-                        </label>
-                        <label class="radio-label">
-                            <input type="radio" name="bulk-provider-mode" value="logo">
-                            <span>Use provider logo</span>
-                        </label>
-                    </div>
-
-                    <div class="control-group">
-                        <h3>Title Font</h3>
-                        <label class="checkbox-label">
-                            <input type="checkbox" id="bulk-custom-font-enabled">
-                            <span>Use custom font</span>
-                        </label>
-                        <div id="bulk-font-select-container" class="font-select-container" style="display: none;">
-                            <select id="bulk-font-select" class="select-input">
-                                <option value="">Loading fonts...</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div class="control-group">
-                        <h3>Font Settings</h3>
-                        <p class="help-text">Manage default fonts for titles and providers</p>
-                        <button id="open-provider-font-modal" class="btn btn-secondary">
-                            Font Settings...
-                        </button>
-                    </div>
-                </div>
-
-                <div class="actions">
-                    <button id="generate-bulk-btn" class="btn btn-primary" disabled>
-                        Generate Selected
-                    </button>
-                    <button id="manage-content-bulk-btn" class="btn btn-secondary">
-                        Manage Content...
-                    </button>
-                    <button id="open-output-bulk-btn" class="btn btn-secondary">
-                        Open Output Folder
-                    </button>
-                </div>
-
-                <div id="bulk-progress" class="progress-bar" style="display: none;">
-                    <div id="progress-fill" class="progress-fill"></div>
-                    <span id="progress-text" class="progress-text">0%</span>
-                </div>
-
-                <div id="bulk-status" class="status"></div>
-            </div>
-
             <!-- Single Game Mode -->
-            <div id="single-mode" class="mode-content">
+            <div id="single-mode" class="mode-content active">
                 <div class="section">
                     <h2>Select Game</h2>
                     <div class="search-box">
@@ -321,10 +206,17 @@
                 <div class="modal-section">
                     <h3>Default Title Font</h3>
                     <p class="help-text">
-                        Set the system-wide default font for all title text. Click "Set as Default" on any font below.
+                        Set the system-wide default font for all title text (currently: AMA Regular)
                     </p>
-                    <div id="provider-modal-fonts-list" class="provider-fonts-list"></div>
-                    <div id="provider-modal-font-status" class="help-text" style="margin-top: 8px; color: #10b981;"></div>
+                    <div class="default-font-selector">
+                        <select id="default-font-select" class="select-input">
+                            <option value="">Loading fonts...</option>
+                        </select>
+                        <button id="save-default-font-btn" class="btn btn-secondary">
+                            Set as Default
+                        </button>
+                    </div>
+                    <div id="default-font-status" class="help-text" style="margin-top: 8px; color: #10b981;"></div>
                 </div>
 
                 <!-- Provider Fonts Section -->
@@ -494,13 +386,20 @@
                         <div id="font-upload-status" class="help-text" style="margin-top: 12px;"></div>
                     </div>
 
-                    <!-- All Fonts List Section -->
+                    <!-- Default Title Font Section -->
                     <div class="modal-section" style="margin-top: 24px;">
-                        <h4>Available Fonts</h4>
+                        <h4>Default Title Font</h4>
                         <p class="help-text">
-                            All fonts available in your system. Click "Set as Default" to use a font as the default title font.
+                            Set the system-wide default font for all title text
                         </p>
-                        <div id="all-fonts-list" class="provider-fonts-list"></div>
+                        <div class="default-font-selector">
+                            <select id="default-font-select" class="select-input">
+                                <option value="">Loading fonts...</option>
+                            </select>
+                            <button id="save-default-font-btn" class="btn btn-secondary">
+                                Set as Default
+                            </button>
+                        </div>
                         <div id="default-font-status" class="help-text" style="margin-top: 8px; color: #10b981;"></div>
                     </div>
 
@@ -512,15 +411,15 @@
                         </p>
                         <div class="provider-font-manager">
                             <div class="provider-font-row">
-                                <select id="manage-provider-font-provider" class="select-input">
+                                <select id="provider-font-provider" class="select-input">
                                     <option value="">Select provider...</option>
                                 </select>
-                                <select id="manage-provider-font-select" class="select-input">
+                                <select id="provider-font-select" class="select-input">
                                     <option value="">Select default font...</option>
                                 </select>
-                                <button id="manage-save-provider-font-btn" class="btn btn-secondary">Save</button>
+                                <button id="save-provider-font-btn" class="btn btn-secondary">Save</button>
                             </div>
-                            <div id="manage-provider-fonts-list" class="provider-fonts-list"></div>
+                            <div id="provider-fonts-list" class="provider-fonts-list"></div>
                         </div>
                     </div>
                 </div>
@@ -531,4 +430,3 @@
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>
 </html>
-<!-- Cache bust -->

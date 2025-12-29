@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Thumbnail Generator</title>
+    <title>Thumbnail Generator - Bulk Process</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
@@ -14,10 +14,10 @@
             <p class="subtitle">Create stunning game thumbnails with ease</p>
         </header>
 
-        <!-- Mode Selector -->
+        <!-- Mode Navigation -->
         <div class="mode-selector">
-            <button class="mode-btn active" data-mode="bulk">Bulk Process</button>
-            <button class="mode-btn" data-mode="single">Single Game</button>
+            <a href="/bulk" class="mode-btn active">Bulk Process</a>
+            <a href="/single" class="mode-btn">Single Game</a>
         </div>
 
         <!-- Main Content -->
@@ -124,9 +124,6 @@
                     <button id="manage-content-bulk-btn" class="btn btn-secondary">
                         Manage Content...
                     </button>
-                    <button id="open-output-bulk-btn" class="btn btn-secondary">
-                        Open Output Folder
-                    </button>
                 </div>
 
                 <div id="bulk-progress" class="progress-bar" style="display: none;">
@@ -135,176 +132,6 @@
                 </div>
 
                 <div id="bulk-status" class="status"></div>
-            </div>
-
-            <!-- Single Game Mode -->
-            <div id="single-mode" class="mode-content">
-                <div class="section">
-                    <h2>Select Game</h2>
-                    <div class="search-box">
-                        <input type="text" id="game-search" class="search-input" placeholder="Search games...">
-                    </div>
-                    <div class="game-selector">
-                        <select id="game-select" class="select-input" size="8">
-                            <option value="">Choose a game...</option>
-                        </select>
-                    </div>
-                    <button id="manage-content-btn" class="btn btn-primary" style="margin-top: 10px; width: 100%;">
-                        Manage Content...
-                    </button>
-
-                    <div id="game-info" class="game-info" style="display: none;">
-                        <div class="info-row">
-                            <span class="label">Provider:</span>
-                            <span id="provider-name" class="value"></span>
-                        </div>
-                        <div class="info-row">
-                            <span class="label">Game:</span>
-                            <span id="game-name" class="value"></span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="section">
-                    <h2>Blur Band</h2>
-                    <div class="control-group">
-                        <label class="checkbox-label">
-                            <input type="checkbox" id="blur-enabled" checked>
-                            <span>Enable blur band</span>
-                        </label>
-
-                        <div id="blur-options" class="blur-options">
-                            <div class="radio-group">
-                                <label class="radio-label">
-                                    <input type="radio" name="blur-mode" value="auto" checked>
-                                    <span>Auto-detect from background</span>
-                                </label>
-                                <label class="radio-label">
-                                    <input type="radio" name="blur-mode" value="manual">
-                                    <span>Manual color selection</span>
-                                </label>
-                            </div>
-
-                            <div id="color-picker-group" class="color-picker-group" style="display: none;">
-                                <label for="blur-color">Blur Color:</label>
-                                <input type="color" id="blur-color" value="#000000">
-                                <span id="color-preview" class="color-preview"></span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="section">
-                    <h2>Title</h2>
-                    <div class="radio-group">
-                        <label class="radio-label">
-                            <input type="radio" name="title-mode" value="text" checked>
-                            <span>Auto from folder name</span>
-                        </label>
-                        <label class="radio-label">
-                            <input type="radio" name="title-mode" value="image">
-                            <span>Use title image</span>
-                        </label>
-                    </div>
-
-                    <div class="control-group" id="title-select-group" style="display: none;">
-                        <label for="title-select">Title Image:</label>
-                        <select id="title-select" class="select-input">
-                        </select>
-                    </div>
-                </div>
-
-                <div class="section">
-                    <h2>Provider</h2>
-                    <div class="radio-group">
-                        <label class="radio-label">
-                            <input type="radio" name="provider-mode" value="none">
-                            <span>Don't show</span>
-                        </label>
-                        <label class="radio-label">
-                            <input type="radio" name="provider-mode" value="text" checked>
-                            <span>Auto from provider name</span>
-                        </label>
-                        <label class="radio-label">
-                            <input type="radio" name="provider-mode" value="logo">
-                            <span>Use provider logo</span>
-                        </label>
-                    </div>
-
-                    <div class="control-group" id="logo-select-group" style="display: none;">
-                        <label for="logo-select">Provider Logo:</label>
-                        <select id="logo-select" class="select-input">
-                        </select>
-                    </div>
-                </div>
-
-                <div id="preview-container" class="preview-container" style="display: none;">
-                    <h3>Live Preview</h3>
-                    <p class="help-text" style="margin-bottom: 12px;">Preview updates automatically as you adjust settings</p>
-                    <img id="preview-image" src="" alt="Generated thumbnail">
-                </div>
-
-                <div class="section">
-                    <h2>Advanced Settings</h2>
-
-                    <!-- Asset Selectors -->
-                    <div class="control-group" id="background-select-group" style="display: none;">
-                        <label>Backgrounds:</label>
-                        <div id="background-checkboxes" class="asset-checkboxes">
-                            <!-- Populated by JavaScript -->
-                        </div>
-                    </div>
-
-                    <div class="control-group" id="character-select-group" style="display: none;">
-                        <label>Characters:</label>
-                        <div id="character-checkboxes" class="asset-checkboxes">
-                            <!-- Populated by JavaScript -->
-                        </div>
-                    </div>
-
-                    <!-- Sliders -->
-                    <div class="control-group">
-                        <label for="text-scale" class="slider-label">Text Size</label>
-                        <input type="range" id="text-scale" min="0.8" max="1.2" step="0.02" value="1" class="slider">
-                        <div class="slider-value"><span id="text-scale-value">1.00x</span></div>
-                    </div>
-                    <div class="control-group">
-                        <label for="text-offset" class="slider-label">Text Vertical Offset</label>
-                        <input type="range" id="text-offset" min="-0.1" max="0.1" step="0.01" value="0" class="slider">
-                        <div class="slider-value"><span id="text-offset-value">0.00</span></div>
-                    </div>
-                    <div class="control-group">
-                        <label for="blur-scale" class="slider-label">Blur Band Intensity</label>
-                        <input type="range" id="blur-scale" min="0.5" max="1.5" step="0.05" value="1" class="slider">
-                        <div class="slider-value"><span id="blur-scale-value">1.00x</span></div>
-                    </div>
-                </div>
-
-                <div class="section">
-                    <h2>Title Font</h2>
-                    <div class="control-group">
-                        <label class="checkbox-label">
-                            <input type="checkbox" id="custom-font-enabled">
-                            <span>Use custom font</span>
-                        </label>
-                        <div id="font-select-container" class="font-select-container" style="display: none;">
-                            <select id="font-select" class="select-input">
-                                <option value="">Loading fonts...</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="actions">
-                    <button id="generate-btn" class="btn btn-primary" disabled>
-                        Generate Thumbnail
-                    </button>
-                    <button id="open-output-btn" class="btn btn-secondary">
-                        Open Output Folder
-                    </button>
-                </div>
-
-                <div id="single-status" class="status"></div>
             </div>
         </div>
     </div>
@@ -321,10 +148,17 @@
                 <div class="modal-section">
                     <h3>Default Title Font</h3>
                     <p class="help-text">
-                        Set the system-wide default font for all title text. Click "Set as Default" on any font below.
+                        Set the system-wide default font for all title text (currently: AMA Regular)
                     </p>
-                    <div id="provider-modal-fonts-list" class="provider-fonts-list"></div>
-                    <div id="provider-modal-font-status" class="help-text" style="margin-top: 8px; color: #10b981;"></div>
+                    <div class="default-font-selector">
+                        <select id="default-font-select" class="select-input">
+                            <option value="">Loading fonts...</option>
+                        </select>
+                        <button id="save-default-font-btn" class="btn btn-secondary">
+                            Set as Default
+                        </button>
+                    </div>
+                    <div id="default-font-status" class="help-text" style="margin-top: 8px; color: #10b981;"></div>
                 </div>
 
                 <!-- Provider Fonts Section -->
@@ -494,13 +328,20 @@
                         <div id="font-upload-status" class="help-text" style="margin-top: 12px;"></div>
                     </div>
 
-                    <!-- All Fonts List Section -->
+                    <!-- Default Title Font Section -->
                     <div class="modal-section" style="margin-top: 24px;">
-                        <h4>Available Fonts</h4>
+                        <h4>Default Title Font</h4>
                         <p class="help-text">
-                            All fonts available in your system. Click "Set as Default" to use a font as the default title font.
+                            Set the system-wide default font for all title text
                         </p>
-                        <div id="all-fonts-list" class="provider-fonts-list"></div>
+                        <div class="default-font-selector">
+                            <select id="default-font-select" class="select-input">
+                                <option value="">Loading fonts...</option>
+                            </select>
+                            <button id="save-default-font-btn" class="btn btn-secondary">
+                                Set as Default
+                            </button>
+                        </div>
                         <div id="default-font-status" class="help-text" style="margin-top: 8px; color: #10b981;"></div>
                     </div>
 
@@ -512,15 +353,15 @@
                         </p>
                         <div class="provider-font-manager">
                             <div class="provider-font-row">
-                                <select id="manage-provider-font-provider" class="select-input">
+                                <select id="provider-font-provider" class="select-input">
                                     <option value="">Select provider...</option>
                                 </select>
-                                <select id="manage-provider-font-select" class="select-input">
+                                <select id="provider-font-select" class="select-input">
                                     <option value="">Select default font...</option>
                                 </select>
-                                <button id="manage-save-provider-font-btn" class="btn btn-secondary">Save</button>
+                                <button id="save-provider-font-btn" class="btn btn-secondary">Save</button>
                             </div>
-                            <div id="manage-provider-fonts-list" class="provider-fonts-list"></div>
+                            <div id="provider-fonts-list" class="provider-fonts-list"></div>
                         </div>
                     </div>
                 </div>
@@ -531,4 +372,3 @@
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>
 </html>
-<!-- Cache bust -->

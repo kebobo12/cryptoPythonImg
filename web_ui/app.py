@@ -11,7 +11,7 @@ import platform
 import os
 from pathlib import Path
 from threading import Timer, Lock
-from flask import Flask, render_template, request, jsonify, send_file
+from flask import Flask, render_template, request, jsonify, send_file, redirect, url_for
 from werkzeug.utils import secure_filename
 import io
 import base64
@@ -29,7 +29,7 @@ from thumbgen.renderer.crypto_card import render_crypto_card
 from thumbgen.constants import DEFAULT_CHARACTER_HEIGHT_RATIO, DEFAULT_FONT_PATH
 
 app = Flask(__name__)
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
+app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100MB max file size
 
 # Detect paths
 if getattr(sys, 'frozen', False):
@@ -130,8 +130,10 @@ preview_asset_cache = LRUCache(max_size=10)
 
 
 @app.route('/')
+@app.route('/bulk')
+@app.route('/single')
 def index():
-    """Render main UI page."""
+    """Render main UI page - handles both bulk and single modes with client-side routing."""
     return render_template('index.html')
 
 
@@ -326,9 +328,9 @@ def get_game_assets(game_path):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
-@app.route('/api/generate', methods=['POST'])
-def generate():
-    """Generate thumbnail for a game."""
+@app.route('/api/generate-single', methods=['POST'])
+def generate_single():
+    """Generate thumbnail for a single game and save to disk."""
     try:
         data = request.json
         game_path = data.get('game_path')
@@ -700,6 +702,347 @@ def set_default_font():
         return jsonify({
             'success': True,
             'message': f'Default font set to {font_name} and applied immediately!'
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/create-game', methods=['POST'])
+def create_game():
+    """
+    Create a new game directory structure.
+    """
+    try:
+        data = request.json
+        provider_name = data.get('provider')
+        game_name = data.get('game')
+
+        if not provider_name or not game_name:
+            return jsonify({'success': False, 'error': 'Provider and game name required'}), 400
+
+        # Sanitize names
+        provider_name = provider_name.strip()
+        game_name = game_name.strip()
+
+        if not provider_name or not game_name:
+            return jsonify({'success': False, 'error': 'Provider and game name cannot be empty'}), 400
+
+        # Create directory structure
+        game_dir = THUMBNAILS_ROOT / provider_name / game_name
+
+        if game_dir.exists():
+            return jsonify({'success': False, 'error': f'Game "{game_name}" already exists for provider "{provider_name}"'}), 400
+
+        # Create game directory and standard folders
+        game_dir.mkdir(parents=True, exist_ok=True)
+        (game_dir / 'Backgrounds').mkdir(exist_ok=True)
+        (game_dir / 'Character').mkdir(exist_ok=True)
+        (game_dir / 'Title').mkdir(exist_ok=True)
+
+        # Create provider logo folder at provider level if it doesn't exist
+        provider_logo_dir = THUMBNAILS_ROOT / provider_name / 'Provider Logo'
+        provider_logo_dir.mkdir(exist_ok=True)
+
+        game_path = f"{provider_name}/{game_name}"
+
+        return jsonify({
+            'success': True,
+            'message': f'Created game "{game_name}" for provider "{provider_name}"',
+            'game_path': game_path,
+            'provider_path': provider_name
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/providers', methods=['GET'])
+def get_providers():
+    """
+    Get list of all providers (top-level directories in Thumbnails).
+    """
+    try:
+        providers = []
+        if THUMBNAILS_ROOT.exists():
+            for item in THUMBNAILS_ROOT.iterdir():
+                if item.is_dir() and not item.name.startswith('.'):
+                    providers.append(item.name)
+
+        providers.sort()
+        return jsonify({
+            'success': True,
+            'providers': providers
+        })
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/upload-assets', methods=['POST'])
+def upload_assets():
+    """
+    Upload multiple image files and analyze them for asset classification.
+    Returns classification results with confidence scores.
+    """
+    try:
+        if 'files' not in request.files:
+            return jsonify({'success': False, 'error': 'No files uploaded'}), 400
+
+        files = request.files.getlist('files')
+        game_path = request.form.get('game_path', '')
+        provider_path = request.form.get('provider_path', '')
+
+        if not files:
+            return jsonify({'success': False, 'error': 'No files selected'}), 400
+
+        # Import detection module
+        from thumbgen.asset_detector import detect_asset_type
+        from thumbgen.constants import IMAGE_EXTENSIONS
+
+        results = []
+        temp_dir = Path(__file__).parent.parent / 'temp_uploads'
+        temp_dir.mkdir(exist_ok=True)
+
+        for file in files:
+            if file.filename == '':
+                continue
+
+            # Check file extension
+            file_ext = Path(file.filename).suffix.lower()
+            if file_ext not in IMAGE_EXTENSIONS:
+                results.append({
+                    'filename': file.filename,
+                    'success': False,
+                    'error': f'Unsupported format: {file_ext}',
+                    'detected_type': None,
+                    'confidence': 0
+                })
+                continue
+
+            # Save temporarily for analysis
+            safe_filename = secure_filename(file.filename)
+            temp_path = temp_dir / safe_filename
+            file.save(str(temp_path))
+
+            try:
+                # Detect asset type
+                asset_type, confidence, scores = detect_asset_type(temp_path)
+
+                # Generate thumbnail for preview
+                from PIL import Image
+                with Image.open(temp_path) as img:
+                    # Create thumbnail (max 150x150)
+                    img.thumbnail((150, 150))
+                    buffer = io.BytesIO()
+                    img.save(buffer, format='PNG')
+                    thumbnail_b64 = base64.b64encode(buffer.getvalue()).decode()
+
+                results.append({
+                    'filename': file.filename,
+                    'temp_filename': safe_filename,
+                    'success': True,
+                    'detected_type': asset_type,  # None if confidence < 50
+                    'confidence': confidence,
+                    'scores': {
+                        'background': scores.background,
+                        'character': scores.character,
+                        'title': scores.title,
+                        'logo': scores.logo
+                    },
+                    'thumbnail': f'data:image/png;base64,{thumbnail_b64}',
+                    'requires_manual': asset_type is None  # True if confidence < 50
+                })
+
+            except Exception as e:
+                results.append({
+                    'filename': file.filename,
+                    'success': False,
+                    'error': str(e),
+                    'detected_type': None,
+                    'confidence': 0
+                })
+
+        return jsonify({
+            'success': True,
+            'results': results,
+            'game_path': game_path,
+            'provider_path': provider_path
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/save-classified-assets', methods=['POST'])
+def save_classified_assets():
+    """
+    Save uploaded files to their classified folders.
+    Creates folder structure if needed.
+    """
+    try:
+        data = request.json
+        game_path = data.get('game_path', '')
+        provider_path = data.get('provider_path', '')
+        classifications = data.get('classifications', [])
+
+        if not game_path:
+            return jsonify({'success': False, 'error': 'Game path required'}), 400
+
+        if not classifications:
+            return jsonify({'success': False, 'error': 'No classifications provided'}), 400
+
+        game_dir = THUMBNAILS_ROOT / game_path
+        provider_dir = THUMBNAILS_ROOT / provider_path if provider_path else None
+        temp_dir = Path(__file__).parent.parent / 'temp_uploads'
+
+        saved_files = []
+        errors = []
+
+        for item in classifications:
+            temp_filename = item.get('temp_filename')
+            asset_type = item.get('type')
+            original_filename = item.get('filename')
+
+            if not temp_filename or not asset_type:
+                errors.append(f"Missing data for {original_filename}")
+                continue
+
+            temp_path = temp_dir / temp_filename
+            if not temp_path.exists():
+                errors.append(f"Temporary file not found: {temp_filename}")
+                continue
+
+            # Determine target folder based on asset type
+            if asset_type == 'background':
+                target_dir = game_dir / 'Backgrounds'
+            elif asset_type == 'character':
+                target_dir = game_dir / 'Character'
+            elif asset_type == 'title':
+                target_dir = game_dir / 'Title'
+            elif asset_type == 'logo':
+                if not provider_dir:
+                    errors.append(f"Provider path required for logo: {original_filename}")
+                    continue
+                target_dir = provider_dir / 'Provider Logo'
+            else:
+                errors.append(f"Invalid asset type '{asset_type}' for {original_filename}")
+                continue
+
+            # Create target directory if needed
+            target_dir.mkdir(parents=True, exist_ok=True)
+
+            # Handle duplicate filenames
+            target_path = target_dir / original_filename
+            if target_path.exists():
+                # Auto-rename with suffix
+                stem = Path(original_filename).stem
+                ext = Path(original_filename).suffix
+                counter = 1
+                while target_path.exists():
+                    target_path = target_dir / f"{stem}_{counter}{ext}"
+                    counter += 1
+
+            # Move file from temp to target
+            import shutil
+            shutil.move(str(temp_path), str(target_path))
+            saved_files.append({
+                'filename': original_filename,
+                'type': asset_type,
+                'path': str(target_path.relative_to(THUMBNAILS_ROOT))
+            })
+
+        # Clean up temp directory
+        try:
+            if temp_dir.exists():
+                for f in temp_dir.glob('*'):
+                    f.unlink()
+        except Exception:
+            pass  # Ignore cleanup errors
+
+        if errors:
+            return jsonify({
+                'success': False,
+                'saved': saved_files,
+                'errors': errors
+            }), 400
+
+        return jsonify({
+            'success': True,
+            'saved': saved_files,
+            'message': f'Successfully saved {len(saved_files)} file(s)'
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/upload-fonts', methods=['POST'])
+def upload_fonts():
+    """
+    Upload font files (.ttf, .otf) to the fonts directory.
+    """
+    try:
+        files = request.files.getlist('files')
+
+        if not files:
+            return jsonify({'success': False, 'error': 'No files provided'}), 400
+
+        fonts_dir = FONTS_ROOT
+        fonts_dir.mkdir(parents=True, exist_ok=True)
+
+        uploaded_fonts = []
+        errors = []
+
+        for file in files:
+            if not file.filename:
+                continue
+
+            filename = secure_filename(file.filename)
+            ext = Path(filename).suffix.lower()
+
+            # Validate font file extension
+            if ext not in ['.ttf', '.otf']:
+                errors.append(f"{filename}: Invalid font format (only .ttf and .otf allowed)")
+                continue
+
+            # Check if font already exists
+            target_path = fonts_dir / filename
+            if target_path.exists():
+                # Auto-rename with counter
+                stem = Path(filename).stem
+                counter = 1
+                while target_path.exists():
+                    target_path = fonts_dir / f"{stem}_{counter}{ext}"
+                    counter += 1
+                filename = target_path.name
+
+            # Save the font file
+            file.save(str(target_path))
+            uploaded_fonts.append({
+                'filename': filename,
+                'path': f'fonts/{filename}'
+            })
+
+        if errors:
+            return jsonify({
+                'success': False if not uploaded_fonts else True,
+                'uploaded': uploaded_fonts,
+                'errors': errors
+            }), 400 if not uploaded_fonts else 200
+
+        return jsonify({
+            'success': True,
+            'uploaded': uploaded_fonts,
+            'message': f'Successfully uploaded {len(uploaded_fonts)} font(s)'
         })
 
     except Exception as e:
