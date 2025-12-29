@@ -36,7 +36,30 @@ def resize_lanczos(image: Image.Image, size: Tuple[int, int]) -> Image.Image:
 # ------------------------------------------------------------
 
 def alpha_composite(base: Image.Image, overlay: Image.Image, pos: tuple):
-    base.alpha_composite(overlay, dest=pos)
+    """
+    Safely composite overlay onto base at position, clipping to base bounds.
+
+    Args:
+        base: Base RGBA image (modified in-place)
+        overlay: Overlay RGBA image
+        pos: (x, y) position tuple
+    """
+    x, y = pos
+
+    # Calculate overlap region
+    src_x = max(0, -x)
+    src_y = max(0, -y)
+    dst_x = max(0, x)
+    dst_y = max(0, y)
+
+    width = min(overlay.width - src_x, base.width - dst_x)
+    height = min(overlay.height - src_y, base.height - dst_y)
+
+    # Only composite if there's a valid region
+    if width > 0 and height > 0:
+        # Crop overlay to region that fits within base
+        cropped_overlay = overlay.crop((src_x, src_y, src_x + width, src_y + height))
+        base.alpha_composite(cropped_overlay, dest=(dst_x, dst_y))
 
 
 # ------------------------------------------------------------

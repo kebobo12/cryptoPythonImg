@@ -19,10 +19,21 @@ def crypto_blur_background(bg: Image.Image) -> Image.Image:
         new_w = CANVAS_W
         new_h = int(bg.height * (CANVAS_W / bg.width))
 
-    bg_resized = bg.resize((new_w, new_h), Image.LANCZOS).convert("RGBA")
+    bg_resized = bg.resize((new_w, new_h), Image.BICUBIC).convert("RGBA")
 
-    left = (new_w - CANVAS_W) // 2
-    top = (new_h - CANVAS_H) // 2
+    # Force symmetric crop to avoid LANCZOS half-pixel seams
+    dx = new_w - CANVAS_W
+    dy = new_h - CANVAS_H
+
+    left = dx // 2
+    top = dy // 2
+
+    # Compensate for odd pixels to eliminate vertical line artifacts
+    if dx % 2 != 0:
+        left += 1
+    if dy % 2 != 0:
+        top += 1
+
     bg_cropped = bg_resized.crop((left, top, left + CANVAS_W, top + CANVAS_H))
 
     fade = Image.new("RGBA", (CANVAS_W, CANVAS_H))
@@ -30,7 +41,7 @@ def crypto_blur_background(bg: Image.Image) -> Image.Image:
 
     for y in range(CANVAS_H):
         alpha = int(80 * (y / CANVAS_H))
-        draw.line([(0, y), (CANVAS_W, y)], fill=(0, 0, 0, alpha))
+        draw.line([(0, y), (CANVAS_W - 1, y)], fill=(0, 0, 0, alpha))
 
     return Image.alpha_composite(bg_cropped, fade)
 
@@ -122,10 +133,26 @@ def render_crypto_card(
 
     resized = character.resize((w, h), Image.LANCZOS)
 
-    glow = resized.filter(ImageFilter.GaussianBlur(50))
-    glow = glow.point(lambda p: int(p * 0.7))
+    # Create glow with proper boundary handling
+    # Add padding for blur to prevent edge artifacts
+    blur_radius = 50
+    padding = blur_radius * 2  # Extra space for blur
 
-    alpha_composite(canvas, glow, (cx - 20, cy - 20))
+    # Create padded canvas for glow
+    padded_w = w + padding * 2
+    padded_h = h + padding * 2
+    glow_padded = Image.new("RGBA", (padded_w, padded_h), (0, 0, 0, 0))
+    glow_padded.alpha_composite(resized, dest=(padding, padding))
+
+    # Apply blur on padded image
+    glow_blurred = glow_padded.filter(ImageFilter.GaussianBlur(blur_radius))
+    glow_blurred = glow_blurred.point(lambda p: int(p * 0.7))
+
+    # Composite glow with offset, using safe clipping
+    glow_x = cx - 20 - padding
+    glow_y = cy - 20 - padding
+    alpha_composite(canvas, glow_blurred, (glow_x, glow_y))
+
     alpha_composite(canvas, resized, (cx, cy))
 
     # ---------------------------------------------------------
@@ -374,3 +401,8 @@ def render_crypto_card(
         canvas = render_provider_logo(canvas, provider_logo, cfg)
 
     return canvas
+
+def safe_alpha_composite(dst, src, pos):
+    tmp = Image.new("RGBA", dst.size, (0, 0, 0, 0))
+    tmp.paste(src, pos)
+    return Image.alpha_composite(dst, tmp)
