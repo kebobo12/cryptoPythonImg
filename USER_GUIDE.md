@@ -13,11 +13,79 @@
 
 ## Getting Started
 
+### Initial Setup
+
+If this is your first time setting up the project:
+
+1. **Install Dependencies**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+2. **Launch the Application**
+
+   Navigate to the web_ui folder:
+   ```bash
+   cd web_ui
+   python -u app.py
+   ```
+
+   The application will automatically create the required folders:
+   - `fonts/` - Place your font files here (TTF/OTF)
+   - `Thumbnails/` - Organize your game assets here
+   - `output/` - Generated thumbnails are saved here
+
+3. **Add Your Assets**
+   - Place font files (TTF/OTF) in the `fonts` folder
+   - Create provider folders inside `Thumbnails` (e.g., `Thumbnails/Pragmatic/`)
+   - Add game folders with required assets following the structure in [Asset Management](#asset-management)
+
+### Updating the Project
+
+If you downloaded a new version and want to keep your existing assets:
+
+1. **Stop the Flask Server**
+   - Press `Ctrl+C` in the terminal where the server is running
+
+2. **Backup Your Assets** (Important!)
+   - Copy your `fonts` folder to a safe location
+   - Copy your `Thumbnails` folder to a safe location
+   - Your `output` folder contains generated thumbnails (optional to backup)
+
+3. **Extract New Version**
+   - Extract the new ZIP file to a new location OR
+   - Replace the old files (but keep your `fonts` and `Thumbnails` folders)
+
+4. **Restore Your Assets**
+   - Copy your backed-up `fonts` folder back to the project root
+   - Copy your backed-up `Thumbnails` folder back to the project root
+
+5. **Update Dependencies**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+6. **Restart the Server**
+
+   Navigate to web_ui folder:
+   ```bash
+   cd web_ui
+   python -u app.py
+   ```
+
+7. **Hard Refresh Browser**
+   - Windows: `Ctrl+Shift+R` or `Ctrl+F5`
+   - Mac: `Cmd+Shift+R`
+   - This clears cached CSS/JS files
+
+**Note**: Your `fonts` and `Thumbnails` folders contain all your custom data and should be preserved between updates.
+
 ### Launching the Application
 
-Run the web UI launcher script:
+Navigate to the web_ui folder:
 ```bash
-python run_webui.py
+cd web_ui
+python -u app.py
 ```
 
 The application will automatically:

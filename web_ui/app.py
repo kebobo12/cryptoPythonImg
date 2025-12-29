@@ -44,8 +44,10 @@ OUTPUT_DIR = BASE_DIR / "output"
 FONTS_DIR = BASE_DIR / "fonts"
 PROVIDER_FONTS_FILE = BASE_DIR / "provider_fonts.json"
 
-# Ensure output directory exists
+# Ensure required directories exist
 OUTPUT_DIR.mkdir(exist_ok=True)
+FONTS_DIR.mkdir(exist_ok=True)
+THUMBNAILS_ROOT.mkdir(exist_ok=True)
 
 
 def get_available_fonts():
