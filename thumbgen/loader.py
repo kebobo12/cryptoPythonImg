@@ -13,26 +13,26 @@ rendering pipeline clean and testable.
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Optional, Tuple
 
 from PIL import Image, ImageFont
 
 from .config import GameConfig
+from .constants import IMAGE_EXTENSIONS
 from .errors import (
     MissingAssetError,
     FontLoadError,
     ProviderLogoError,
 )
 
+logger = logging.getLogger('thumbgen.loader')
+
 
 # ------------------------------------------------------------
 # Image loading
 # ------------------------------------------------------------
-
-# Supported image extensions (order matters - PNG first as most common)
-IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp', '.bmp', '.gif', '.tiff', '.tif']
-
 
 def find_first_image_in_folder(folder: Path) -> Optional[Path]:
     """
@@ -155,7 +155,18 @@ def load_background(game_dir: Path, filename: str = None) -> Image.Image:
             return load_image(found, required=True)
 
     # Fallback to old structure: background.png
-    return load_image(game_dir / "background", required=True)
+    try:
+        return load_image(game_dir / "background", required=True)
+    except MissingAssetError:
+        # Final fallback: use auto-detection
+        from .asset_detector import classify_game_assets
+        logger.info(f"No background found via folders/naming, trying auto-detection in {game_dir}")
+        classified = classify_game_assets(game_dir)
+        if classified.backgrounds:
+            bg_path, confidence = classified.backgrounds[0]
+            logger.info(f"Auto-detected background: {bg_path.name} (confidence: {confidence:.0f})")
+            return load_image(bg_path, required=True)
+        raise MissingAssetError(f"No background image found in {game_dir}")
 
 
 def load_character(game_dir: Path) -> Image.Image:
@@ -228,7 +239,21 @@ def load_characters(game_dir: Path, filenames: list[str] = None) -> list[Image.I
 
     # If no numbered characters found, fall back to single character.png
     if not characters:
-        characters.append(load_character(game_dir))
+        try:
+            characters.append(load_character(game_dir))
+        except MissingAssetError:
+            # Final fallback: use auto-detection
+            from .asset_detector import classify_game_assets
+            logger.info(f"No characters found via folders/naming, trying auto-detection in {game_dir}")
+            classified = classify_game_assets(game_dir)
+            if classified.characters:
+                for char_path, confidence in classified.characters[:3]:  # Max 3
+                    logger.info(f"Auto-detected character: {char_path.name} (confidence: {confidence:.0f})")
+                    img = load_image(char_path, required=False)
+                    if img:
+                        characters.append(img)
+            if not characters:
+                raise MissingAssetError(f"No character images found in {game_dir}")
 
     return characters
 
@@ -299,6 +324,17 @@ def load_provider_logo(game_dir: Path, cfg: GameConfig, filename: str = None) ->
         # If no base match, try the exact path from config
         logo_path = game_dir / cfg.provider_logo.path
         if not logo_path.exists():
+            # Final fallback: try auto-detection
+            from .asset_detector import classify_game_assets
+            logger.info(f"No provider logo found via folders/naming, trying auto-detection in {game_dir}")
+            classified = classify_game_assets(game_dir)
+            if classified.logos:
+                logo_path, confidence = classified.logos[0]
+                logger.info(f"Auto-detected logo: {logo_path.name} (confidence: {confidence:.0f})")
+                try:
+                    return Image.open(logo_path).convert("RGBA")
+                except Exception as exc:
+                    logger.error(f"Failed to load auto-detected logo {logo_path}: {exc}")
             # Missing provider logo is NOT fatal — fallback to provider_text
             return None
 
@@ -369,6 +405,18 @@ def load_title_image(game_dir: Path, cfg: GameConfig, filename: str = None) -> O
         # If no base match, try the exact path from config
         title_path = game_dir / cfg.title_image.path
         if not title_path.exists():
+            # Final fallback: try auto-detection
+            from .asset_detector import classify_game_assets
+            logger.info(f"No title image found via folders/naming, trying auto-detection in {game_dir}")
+            classified = classify_game_assets(game_dir)
+            if classified.titles:
+                title_path, confidence = classified.titles[0]
+                logger.info(f"Auto-detected title: {title_path.name} (confidence: {confidence:.0f})")
+                try:
+                    img = Image.open(title_path)
+                    return img.convert("RGBA")
+                except Exception as exc:
+                    logger.error(f"Failed to load auto-detected title {title_path}: {exc}")
             # Missing title image is NOT fatal — fallback to text title
             return None
 

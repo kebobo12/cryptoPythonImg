@@ -1,4 +1,5 @@
 {
-  "Unknown": "fonts/hacksaw/anton.ttf",
-  "Pragmatic": "fonts/hacksaw/anton.ttf"
+  "Unknown": "fonts/Poppins-Black.ttf",
+  "Pragmatic": "fonts/anton.ttf",
+  "Hacksaw": "fonts/Gotham-Bold.otf"
 }

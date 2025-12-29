@@ -6,7 +6,14 @@ parameters for all generated thumbnails. They can be overridden in config.json
 on a per-game basis if needed.
 """
 
-from typing import Tuple
+from typing import Tuple, List
+
+# -----------------------------------------------------------
+# Image file extensions
+# -----------------------------------------------------------
+
+# Supported image extensions (order matters - PNG first as most common)
+IMAGE_EXTENSIONS: List[str] = ['.png', '.jpg', '.jpeg', '.webp', '.bmp', '.gif', '.tiff', '.tif']
 
 # -----------------------------------------------------------
 # Canvas specifications
@@ -67,7 +74,7 @@ CHAR_MAX_WIDTH_RATIO: float = 0.90  # Characters use max 90% of canvas width
 # Default font path (use AMA-Regular as default)
 from pathlib import Path
 _project_root = Path(__file__).parent.parent
-DEFAULT_FONT_PATH: str = str(_project_root / "fonts/ama_squiggly/AMA-Regular.ttf")
+DEFAULT_FONT_PATH: str = str(_project_root / "fonts/AMA-Regular.ttf")
 
 # Text size ratios relative to canvas height
 TITLE_FONT_RATIO: float = 0.11
@@ -115,3 +122,34 @@ def get_provider_font(provider_name: str, fallback: str = None) -> str:
         fallback = DEFAULT_FONT_PATH
 
     return fallback
+
+# -----------------------------------------------------------
+# Asset Detection Configuration
+# -----------------------------------------------------------
+
+# Minimum confidence score to auto-classify (0-100)
+ASSET_DETECTION_MIN_CONFIDENCE: int = 50
+
+# Minimum score differential between winner and runner-up
+ASSET_DETECTION_SCORE_DIFFERENTIAL: int = 20
+
+# Maximum number of characters to auto-detect
+MAX_CHARACTERS_AUTO_DETECT: int = 3
+
+# Transparency thresholds
+TRANSPARENCY_THRESHOLD_MIN: float = 0.05  # 5% = "has minimal transparency"
+TRANSPARENCY_THRESHOLD_HIGH: float = 0.20  # 20% = "likely character"
+
+# Dimension thresholds (pixels)
+BACKGROUND_MIN_DIMENSION: int = 800
+CHARACTER_MIN_HEIGHT: int = 400
+CHARACTER_MAX_HEIGHT: int = 2000
+TITLE_MAX_HEIGHT: int = 600
+LOGO_MAX_DIMENSION: int = 400
+
+# Aspect ratio thresholds
+LANDSCAPE_RATIO: float = 1.2  # Width/height > 1.2 = landscape
+PORTRAIT_RATIO: float = 0.9   # Width/height < 0.9 = portrait
+SQUARE_MIN_RATIO: float = 0.7  # Square range min
+SQUARE_MAX_RATIO: float = 1.3  # Square range max
+TITLE_WIDE_RATIO: float = 1.5  # Wide title images
