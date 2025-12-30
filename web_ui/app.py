@@ -498,6 +498,22 @@ def generate_bulk():
 
         print(f"[BULK GEN] Received settings: {settings}", flush=True)
 
+        # Validate custom dimensions if provided
+        if 'canvas_width' in settings or 'canvas_height' in settings:
+            width = settings.get('canvas_width', 440)
+            height = settings.get('canvas_height', 590)
+
+            # Validate range
+            if not (100 <= width <= 4000) or not (100 <= height <= 4000):
+                return jsonify({
+                    'success': False,
+                    'error': f'Dimensions must be between 100-4000px. Got {width}x{height}'
+                }), 400
+
+            settings['canvas_width'] = width
+            settings['canvas_height'] = height
+            print(f"[BULK GEN] Using custom dimensions: {width}x{height}", flush=True)
+
         if not game_paths:
             return jsonify({'success': False, 'error': 'No games selected'}), 400
 

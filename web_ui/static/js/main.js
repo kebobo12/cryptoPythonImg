@@ -235,6 +235,26 @@ function setupEventListeners() {
         radio.addEventListener('change', toggleBulkColorPicker);
     });
 
+    // Custom dimensions controls
+    const bulkCustomDimensions = document.getElementById('bulk-custom-dimensions');
+    const bulkCanvasWidth = document.getElementById('bulk-canvas-width');
+    const bulkCanvasHeight = document.getElementById('bulk-canvas-height');
+
+    if (bulkCustomDimensions) {
+        bulkCustomDimensions.addEventListener('change', function() {
+            document.getElementById('bulk-dimensions-controls').style.display =
+                this.checked ? 'block' : 'none';
+        });
+    }
+
+    if (bulkCanvasWidth) {
+        bulkCanvasWidth.addEventListener('input', updateAspectRatio);
+    }
+
+    if (bulkCanvasHeight) {
+        bulkCanvasHeight.addEventListener('input', updateAspectRatio);
+    }
+
     // Generate buttons
     generateBtn.addEventListener('click', generateThumbnail);
     generateBulkBtn.addEventListener('click', generateBulkThumbnails);
@@ -1083,7 +1103,29 @@ function getBulkSettings() {
     // Don't send custom_font at all if checkbox is unchecked or no font selected
     // This allows provider defaults to apply
 
+    // Add custom dimensions if enabled
+    const customDimensionsCheckbox = document.getElementById('bulk-custom-dimensions');
+    if (customDimensionsCheckbox && customDimensionsCheckbox.checked) {
+        settings.canvas_width = parseInt(document.getElementById('bulk-canvas-width').value) || 440;
+        settings.canvas_height = parseInt(document.getElementById('bulk-canvas-height').value) || 590;
+    }
+
     return settings;
+}
+
+// Custom Dimensions Functions
+function updateAspectRatio() {
+    const width = parseInt(document.getElementById('bulk-canvas-width').value) || 440;
+    const height = parseInt(document.getElementById('bulk-canvas-height').value) || 590;
+    const ratio = (width / height).toFixed(2);
+    const type = ratio > 1 ? 'Landscape' : ratio < 1 ? 'Portrait' : 'Square';
+    document.getElementById('bulk-aspect-ratio').textContent = `${ratio}:1 (${type})`;
+}
+
+function setBulkDimensions(width, height) {
+    document.getElementById('bulk-canvas-width').value = width;
+    document.getElementById('bulk-canvas-height').value = height;
+    updateAspectRatio();
 }
 
 // Live Preview Functions

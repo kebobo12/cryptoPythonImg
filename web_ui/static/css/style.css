@@ -1018,3 +1018,20 @@ body {
     padding-top: 20px;
     border-top: 1px solid var(--border-color);
 }
+
+/* Preset Buttons (for custom dimensions) */
+.preset-btn {
+    padding: 4px 12px;
+    font-size: 11px;
+    background: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    cursor: pointer;
+    color: var(--text-primary);
+    transition: all 0.2s ease;
+}
+
+.preset-btn:hover {
+    background: var(--surface-hover);
+    border-color: var(--primary-color);
+}
