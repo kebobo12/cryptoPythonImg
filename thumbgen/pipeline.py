@@ -29,7 +29,6 @@ from .renderer.band import render_bottom_band
 from .renderer.text_block import render_text_block
 from .renderer.title_image import render_title_image
 from .provider_logo import render_provider_logo
-from .constants import CANVAS_W, CANVAS_H
 
 
 def generate_thumbnail(game_dir: Path, output_dir: Path, settings: dict = None) -> Optional[Path]:
@@ -96,6 +95,7 @@ def generate_thumbnail(game_dir: Path, output_dir: Path, settings: dict = None) 
         # CRYPTO MODE - Single character with text overlay
         if layout == "crypto":
             from .renderer.crypto_card import render_crypto_card
+            from .constants import CANVAS_W, CANVAS_H
 
             blur_style = getattr(cfg, "blur_style", "straight")
             band_color = getattr(cfg, "band_color", None)
@@ -103,6 +103,12 @@ def generate_thumbnail(game_dir: Path, output_dir: Path, settings: dict = None) 
             blur_scale = float(settings.get('blur_scale', 1.0))
             text_scale = float(settings.get('text_scale', 1.0))
             text_offset = float(settings.get('text_offset', 0.0))
+
+            # Extract custom dimensions from settings (or use defaults)
+            canvas_width = settings.get('canvas_width', CANVAS_W)
+            canvas_height = settings.get('canvas_height', CANVAS_H)
+            print(f"[PIPELINE] Using dimensions: {canvas_width}x{canvas_height} (settings: {settings.get('canvas_width')}, {settings.get('canvas_height')})", flush=True)
+
             canvas = render_crypto_card(
                 background=assets.background,
                 character=assets.characters[0],
@@ -117,7 +123,14 @@ def generate_thumbnail(game_dir: Path, output_dir: Path, settings: dict = None) 
                 blur_scale=blur_scale,
                 text_scale=text_scale,
                 text_offset=text_offset,
+                canvas_width=canvas_width,
+                canvas_height=canvas_height,
             )
+
+            # Update output filename if custom dimensions
+            if canvas_width != CANVAS_W or canvas_height != CANVAS_H:
+                base_name = cfg.output_filename.rsplit('.', 1)[0]
+                cfg.output_filename = f"{base_name}_{canvas_width}x{canvas_height}.png"
 
             out_path = output_dir / cfg.output_filename
             save_png(canvas, out_path)

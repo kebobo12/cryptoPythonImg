@@ -115,6 +115,34 @@
                             Font Settings...
                         </button>
                     </div>
+
+                    <!-- Custom Dimensions (BETA) -->
+                    <div class="control-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="bulk-custom-dimensions">
+                            <span>Custom Output Size (BETA)</span>
+                        </label>
+                        <div id="bulk-dimensions-controls" style="display: none; margin-left: 20px; margin-top: 10px;">
+                            <div style="display: flex; gap: 10px; margin-bottom: 8px;">
+                                <div>
+                                    <label style="font-size: 12px; color: var(--text-secondary);">Width (px)</label><br>
+                                    <input type="number" id="bulk-canvas-width" value="440" min="100" max="4000" class="input-field" style="width: 80px;">
+                                </div>
+                                <div>
+                                    <label style="font-size: 12px; color: var(--text-secondary);">Height (px)</label><br>
+                                    <input type="number" id="bulk-canvas-height" value="590" min="100" max="4000" class="input-field" style="width: 80px;">
+                                </div>
+                            </div>
+                            <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 8px;">
+                                Aspect Ratio: <span id="bulk-aspect-ratio">0.75:1 (Portrait)</span>
+                            </div>
+                            <div style="display: flex; gap: 5px;">
+                                <button type="button" class="preset-btn" onclick="setBulkDimensions(590, 590)">Square</button>
+                                <button type="button" class="preset-btn" onclick="setBulkDimensions(787, 443)">16:9</button>
+                                <button type="button" class="preset-btn" onclick="setBulkDimensions(440, 590)">Reset</button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="actions">

@@ -8,22 +8,27 @@ from ..utils.images import alpha_composite
 # -------------------------------------------------------------
 # Background Blur + Fade
 # -------------------------------------------------------------
-def crypto_blur_background(bg: Image.Image) -> Image.Image:
+def crypto_blur_background(bg: Image.Image, canvas_w: int = None, canvas_h: int = None) -> Image.Image:
+    if canvas_w is None:
+        canvas_w = CANVAS_W
+    if canvas_h is None:
+        canvas_h = CANVAS_H
+
     bg_ratio = bg.width / bg.height
-    canvas_ratio = CANVAS_W / CANVAS_H
+    canvas_ratio = canvas_w / canvas_h
 
     if bg_ratio > canvas_ratio:
-        new_h = CANVAS_H
-        new_w = int(bg.width * (CANVAS_H / bg.height))
+        new_h = canvas_h
+        new_w = int(bg.width * (canvas_h / bg.height))
     else:
-        new_w = CANVAS_W
-        new_h = int(bg.height * (CANVAS_W / bg.width))
+        new_w = canvas_w
+        new_h = int(bg.height * (canvas_w / bg.width))
 
     bg_resized = bg.resize((new_w, new_h), Image.BICUBIC).convert("RGBA")
 
     # Force symmetric crop to avoid LANCZOS half-pixel seams
-    dx = new_w - CANVAS_W
-    dy = new_h - CANVAS_H
+    dx = new_w - canvas_w
+    dy = new_h - canvas_h
 
     left = dx // 2
     top = dy // 2
@@ -34,14 +39,14 @@ def crypto_blur_background(bg: Image.Image) -> Image.Image:
     if dy % 2 != 0:
         top += 1
 
-    bg_cropped = bg_resized.crop((left, top, left + CANVAS_W, top + CANVAS_H))
+    bg_cropped = bg_resized.crop((left, top, left + canvas_w, top + canvas_h))
 
-    fade = Image.new("RGBA", (CANVAS_W, CANVAS_H))
+    fade = Image.new("RGBA", (canvas_w, canvas_h))
     draw = ImageDraw.Draw(fade)
 
-    for y in range(CANVAS_H):
-        alpha = int(80 * (y / CANVAS_H))
-        draw.line([(0, y), (CANVAS_W - 1, y)], fill=(0, 0, 0, alpha))
+    for y in range(canvas_h):
+        alpha = int(80 * (y / canvas_h))
+        draw.line([(0, y), (canvas_w - 1, y)], fill=(0, 0, 0, alpha))
 
     return Image.alpha_composite(bg_cropped, fade)
 
@@ -49,9 +54,9 @@ def crypto_blur_background(bg: Image.Image) -> Image.Image:
 # -------------------------------------------------------------
 # Dynamic text sizing + metrics
 # -------------------------------------------------------------
-def measure_text_block(lines, font_ratio, font_path, line_gap_ratio=0.01):
+def measure_text_block(lines, font_ratio, font_path, canvas_h, line_gap_ratio=0.01):
     draw = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
-    size = max(1, int(CANVAS_H * font_ratio))  # Ensure minimum size of 1
+    size = max(1, int(canvas_h * font_ratio))  # Ensure minimum size of 1
     from pathlib import Path
     font_file_exists = Path(font_path or DEFAULT_FONT_PATH).exists() if font_path else True
     print(f"[DEBUG MEASURE] Font path: {font_path}, Size: {size}, Exists: {font_file_exists}", flush=True)
@@ -69,23 +74,23 @@ def measure_text_block(lines, font_ratio, font_path, line_gap_ratio=0.01):
         max_width = max(max_width, w)
         total_height += h
         if i < len(lines) - 1:
-            total_height += int(CANVAS_H * line_gap_ratio)
+            total_height += int(canvas_h * line_gap_ratio)
 
         line_data.append((line, font, bbox, w, h))
 
     return total_height, max_width, line_data
 
 
-def draw_text_block(canvas, line_data, y_start, fill):
+def draw_text_block(canvas, line_data, y_start, fill, canvas_width, canvas_height):
     draw = ImageDraw.Draw(canvas)
     y = y_start
 
     for line, font, _bbox, w, h in line_data:
-        x = (CANVAS_W - w) // 2
+        x = (canvas_width - w) // 2
         font_name = font.getname() if hasattr(font, 'getname') else 'unknown'
         print(f"[DEBUG DRAW] Drawing '{line}' with font {font} (family={font_name}) at ({x}, {y})", flush=True)
         draw.text((x, y), line, font=font, fill=fill)
-        y += h + int(CANVAS_H * 0.01)
+        y += h + int(canvas_height * 0.01)
 
 
 # -------------------------------------------------------------
@@ -108,9 +113,16 @@ def render_crypto_card(
     blur_scale: float = 1.0,
     text_scale: float = 1.0,
     text_offset: float = 0.0,
+    canvas_width: int = None,
+    canvas_height: int = None,
 ):
+    # Use defaults if not provided
+    if canvas_width is None:
+        canvas_width = CANVAS_W
+    if canvas_height is None:
+        canvas_height = CANVAS_H
 
-    canvas = crypto_blur_background(background)
+    canvas = crypto_blur_background(background, canvas_width, canvas_height)
 
     if not font_path:
         font_path = DEFAULT_FONT_PATH
@@ -118,8 +130,8 @@ def render_crypto_card(
     # ---------------------------------------------------------
     # CHARACTER (large, center)
     # ---------------------------------------------------------
-    max_width = int(CANVAS_W * 0.95)
-    max_height = int(CANVAS_H * 0.85)
+    max_width = int(canvas_width * 0.95)
+    max_height = int(canvas_height * 0.85)
 
     width_scale = max_width / character.width
     height_scale = max_height / character.height
@@ -128,8 +140,8 @@ def render_crypto_card(
     w = int(character.width * scale)
     h = int(character.height * scale)
 
-    cx = (CANVAS_W - w) // 2
-    cy = int(CANVAS_H * 0.02)
+    cx = (canvas_width - w) // 2
+    cy = int(canvas_height * 0.02)
 
     resized = character.resize((w, h), Image.LANCZOS)
 
@@ -201,25 +213,25 @@ def render_crypto_card(
         intensity_scale = max(0.3, min(2.0, blur_scale))
 
         # Small ellipse (solid core - almost edge to edge, flatter)
-        SMALL_ARC_W = int(CANVAS_W * 1.15)
-        SMALL_ARC_H = int(CANVAS_H * 0.315)  # 10% flatter (0.35 * 0.9)
+        SMALL_ARC_W = int(canvas_width * 1.15)
+        SMALL_ARC_H = int(canvas_height * 0.315)  # 10% flatter (0.35 * 0.9)
 
         small_bbox = (
-            CANVAS_W // 2 - SMALL_ARC_W // 2,
-            int(CANVAS_H - SMALL_ARC_H * 0.7),  # Higher position (was 0.5)
-            CANVAS_W // 2 + SMALL_ARC_W // 2,
-            int(CANVAS_H + SMALL_ARC_H * 1.3)   # Extends further down
+            canvas_width // 2 - SMALL_ARC_W // 2,
+            int(canvas_height - SMALL_ARC_H * 0.7),  # Higher position (was 0.5)
+            canvas_width // 2 + SMALL_ARC_W // 2,
+            int(canvas_height + SMALL_ARC_H * 1.3)   # Extends further down
         )
 
         # Large ellipse (fade extent - reaches title area)
-        LARGE_ARC_W = int(CANVAS_W * 1.1)
-        LARGE_ARC_H = int(CANVAS_H * 0.65)  # Much taller
+        LARGE_ARC_W = int(canvas_width * 1.1)
+        LARGE_ARC_H = int(canvas_height * 0.65)  # Much taller
 
         large_bbox = (
-            CANVAS_W // 2 - LARGE_ARC_W // 2,
-            int(CANVAS_H - LARGE_ARC_H * 0.5),
-            CANVAS_W // 2 + LARGE_ARC_W // 2,
-            int(CANVAS_H + LARGE_ARC_H * 1.5)
+            canvas_width // 2 - LARGE_ARC_W // 2,
+            int(canvas_height - LARGE_ARC_H * 0.5),
+            canvas_width // 2 + LARGE_ARC_W // 2,
+            int(canvas_height + LARGE_ARC_H * 1.5)
         )
 
         # Create gradient overlay
@@ -252,25 +264,25 @@ def render_crypto_card(
     # ---------------------------------------------------------
     # TEXT BLOCK (title + provider)
     # ---------------------------------------------------------
-    text_area_start = int(CANVAS_H * 0.68)
-    text_area_end   = int(CANVAS_H * 0.95)
+    text_area_start = int(canvas_height * 0.68)
+    text_area_end   = int(canvas_height * 0.95)
     available_height = text_area_end - text_area_start
-    available_width  = int(CANVAS_W * 0.92)
+    available_width  = int(canvas_width * 0.92)
 
     # Initial ratios
     title_ratio    = 0.15 * text_scale
     provider_ratio = 0.045 * text_scale
-    min_gap = int(CANVAS_H * 0.04)
+    min_gap = int(canvas_height * 0.04)
 
     # Reserve space for provider if present
-    min_provider_height = int(CANVAS_H * 0.03) if provider else 0  # ~16px for provider
+    min_provider_height = int(canvas_height * 0.03) if provider else 0  # ~16px for provider
 
     # ---------------------------------------------------------
     # 1) TITLE — Fit WIDTH and respect provider space
     # ---------------------------------------------------------
     for _ in range(10):
         title_h, title_w, title_data = measure_text_block(
-            title_lines, title_ratio, font_path
+            title_lines, title_ratio, font_path, canvas_height
         )
 
         fits_width = title_w <= available_width
@@ -295,14 +307,14 @@ def render_crypto_card(
 
     # Recalculate title
     title_h, title_w, title_data = measure_text_block(
-        title_lines, title_ratio, font_path
+        title_lines, title_ratio, font_path, canvas_height
     )
 
     # If using title image, calculate its actual height for layout purposes
     actual_title_h = title_h
     if title_image is not None:
-        available_width_img = int(CANVAS_W * 0.92)
-        available_height_img = int(CANVAS_H * 0.27)
+        available_width_img = int(canvas_width * 0.92)
+        available_height_img = int(canvas_height * 0.27)
         orig_width, orig_height = title_image.size
         width_scale = available_width_img / orig_width
         height_scale = available_height_img / orig_height
@@ -326,11 +338,11 @@ def render_crypto_card(
 
         # Measure once with the base ratio
         prov_h, prov_w, prov_data = measure_text_block(
-            [provider], provider_ratio, provider_font_path
+            [provider], provider_ratio, provider_font_path, canvas_height
         )
 
         # Remaining space to the bottom; anchor provider near bottom with padding
-        bottom_padding = int(CANVAS_H * 0.04)
+        bottom_padding = int(canvas_height * 0.04)
         max_provider_h = max(1, text_area_end - bottom_padding - text_area_start)
 
         # If it would overflow, shrink a bit (light clamp)
@@ -340,7 +352,7 @@ def render_crypto_card(
             scale = min(scale_w, scale_h) * 0.9
             provider_ratio = max(0.03, provider_ratio * scale)
             prov_h, prov_w, prov_data = measure_text_block(
-                [provider], provider_ratio, provider_font_path
+                [provider], provider_ratio, provider_font_path, canvas_height
             )
 
     # ---------------------------------------------------------
@@ -348,7 +360,7 @@ def render_crypto_card(
     # ---------------------------------------------------------
     if provider:
         # Anchor provider near bottom with padding for consistency
-        bottom_padding = int(CANVAS_H * 0.04)
+        bottom_padding = int(canvas_height * 0.04)
         prov_y = text_area_end - bottom_padding - prov_h
 
         # Space available for title above provider
@@ -370,14 +382,14 @@ def render_crypto_card(
         canvas = render_title_image(canvas, title_image, scale=1.0, provider_height=prov_h if provider else 0)
     else:
         # Use text title
-        draw_text_block(canvas, title_data, title_y, (255, 255, 255, 255))
+        draw_text_block(canvas, title_data, title_y, (255, 255, 255, 255), canvas_width, canvas_height)
 
     # Draw provider (if exists)
     if provider:
         # Apply optional vertical offset (text_offset is ratio of canvas height)
-        prov_y_with_offset = prov_y + int(text_offset * CANVAS_H)
-        title_y = title_y + int(text_offset * CANVAS_H)
-        draw_text_block(canvas, prov_data, prov_y_with_offset, (255, 255, 255, 235))
+        prov_y_with_offset = prov_y + int(text_offset * canvas_height)
+        title_y = title_y + int(text_offset * canvas_height)
+        draw_text_block(canvas, prov_data, prov_y_with_offset, (255, 255, 255, 235), canvas_width, canvas_height)
 
     # ---------------------------------------------------------
     # PROVIDER LOGO (if enabled)
