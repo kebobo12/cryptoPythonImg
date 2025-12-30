@@ -1035,3 +1035,33 @@ body {
     background: var(--surface-hover);
     border-color: var(--primary-color);
 }
+
+/* Asset Preview Tooltip */
+.asset-preview-tooltip {
+    position: fixed;
+    z-index: 10000;
+    background: var(--surface-color);
+    border: 2px solid var(--primary-color);
+    border-radius: 8px;
+    padding: 8px;
+    box-shadow: var(--shadow-lg);
+    pointer-events: none;
+    max-width: 300px;
+}
+
+.asset-preview-tooltip img {
+    display: block;
+    max-width: 100%;
+    max-height: 200px;
+    width: auto;
+    height: auto;
+    border-radius: 4px;
+}
+
+.asset-preview-tooltip .filename {
+    margin-top: 6px;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    text-align: center;
+    word-break: break-all;
+}

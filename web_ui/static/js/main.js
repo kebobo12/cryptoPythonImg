@@ -901,6 +901,11 @@ function populateAssetSelectors() {
         backgroundCheckboxes.querySelectorAll('input[type="radio"]').forEach(rb => {
             rb.addEventListener('change', debouncedPreview);
         });
+        // Add preview tooltips
+        backgroundCheckboxes.querySelectorAll('label').forEach((label, index) => {
+            const bg = currentGameAssets.backgrounds[index];
+            attachPreviewListeners(label, `Backgrounds/${bg}`, bg);
+        });
         backgroundSelectGroup.style.display = 'block';
     } else {
         backgroundCheckboxes.innerHTML = '';
@@ -918,6 +923,11 @@ function populateAssetSelectors() {
         // Add change listeners to all radio buttons
         characterCheckboxes.querySelectorAll('input[type="radio"]').forEach(rb => {
             rb.addEventListener('change', debouncedPreview);
+        });
+        // Add preview tooltips
+        characterCheckboxes.querySelectorAll('label').forEach((label, index) => {
+            const char = currentGameAssets.characters[index];
+            attachPreviewListeners(label, `Character/${char}`, char);
         });
         characterSelectGroup.style.display = 'block';
     } else {
@@ -1710,6 +1720,10 @@ async function saveClassifiedAssets() {
             uploadStatus.textContent = data.message;
             uploadStatus.style.color = '#10b981';
 
+            // Refresh game dropdown immediately
+            await loadGames();
+            await loadGamesForAssetTab();
+
             // Reset upload area after success
             setTimeout(() => {
                 assetFilesInput.value = '';
@@ -2115,6 +2129,79 @@ async function uploadFonts(files) {
         fontUploadStatus.style.color = '#ef4444';
         selectedFontsInfo.textContent = '';
     }
+}
+
+// ===== Asset Preview Tooltip =====
+let previewTooltip = null;
+
+function createPreviewTooltip() {
+    const tooltip = document.createElement('div');
+    tooltip.className = 'asset-preview-tooltip';
+    tooltip.style.display = 'none';
+    document.body.appendChild(tooltip);
+    return tooltip;
+}
+
+function showAssetPreview(assetPath, filename, event) {
+    if (!previewTooltip) {
+        previewTooltip = createPreviewTooltip();
+        console.log('Created tooltip:', previewTooltip);
+    }
+
+    const gamePath = gameSelect.value;
+    if (!gamePath) return;
+
+    // Normalize path separators to forward slashes
+    const normalizedGamePath = gamePath.replace(/\\/g, '/');
+    const normalizedAssetPath = assetPath.replace(/\\/g, '/');
+
+    const previewUrl = `/api/asset-preview?game=${encodeURIComponent(normalizedGamePath)}&asset=${encodeURIComponent(normalizedAssetPath)}`;
+
+    previewTooltip.innerHTML = `
+        <img src="${previewUrl}" alt="${filename}" onerror="console.error('Preview failed:', this.src)">
+        <div class="filename">${filename}</div>
+    `;
+
+    previewTooltip.style.display = 'block';
+    console.log('Tooltip display:', previewTooltip.style.display);
+    console.log('Tooltip position:', previewTooltip.style.left, previewTooltip.style.top);
+    updateTooltipPosition(event);
+    console.log('After position update:', previewTooltip.style.left, previewTooltip.style.top);
+}
+
+function hideAssetPreview() {
+    if (previewTooltip) {
+        previewTooltip.style.display = 'none';
+    }
+}
+
+function updateTooltipPosition(event) {
+    if (!previewTooltip) return;
+
+    const tooltipWidth = 300;
+    const tooltipHeight = 250;
+    const margin = 15;
+
+    let x = event.clientX + margin;
+    let y = event.clientY + margin;
+
+    // Keep tooltip within viewport
+    if (x + tooltipWidth > window.innerWidth) {
+        x = event.clientX - tooltipWidth - margin;
+    }
+
+    if (y + tooltipHeight > window.innerHeight) {
+        y = event.clientY - tooltipHeight - margin;
+    }
+
+    previewTooltip.style.left = x + 'px';
+    previewTooltip.style.top = y + 'px';
+}
+
+function attachPreviewListeners(label, assetPath, filename) {
+    label.addEventListener('mouseenter', (e) => showAssetPreview(assetPath, filename, e));
+    label.addEventListener('mousemove', updateTooltipPosition);
+    label.addEventListener('mouseleave', hideAssetPreview);
 }
 
 // Cache bust 5 - reset dropdown selections on game switch

@@ -22,7 +22,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from thumbgen import generate_thumbnail
 from thumbgen.errors import ThumbgenError
-from thumbgen.cli import find_all_game_directories
 from thumbgen.loader import load_assets
 from thumbgen.config import GameConfig, TitleImageConfig, ProviderLogoConfig
 from thumbgen.renderer.crypto_card import render_crypto_card
@@ -48,6 +47,36 @@ PROVIDER_FONTS_FILE = BASE_DIR / "provider_fonts.json"
 OUTPUT_DIR.mkdir(exist_ok=True)
 FONTS_DIR.mkdir(exist_ok=True)
 THUMBNAILS_ROOT.mkdir(exist_ok=True)
+
+
+def find_all_game_directories(root: Path):
+    """
+    Find all game directories in Provider/Game structure.
+
+    Structure: Thumbnails/Provider/GameName/
+
+    Args:
+        root: Root directory to search (Thumbnails/)
+
+    Returns:
+        List of Path objects pointing to game directories
+    """
+    game_dirs = []
+
+    if not root.exists():
+        return game_dirs
+
+    # Traverse Provider/Game structure
+    for provider_dir in sorted(root.iterdir()):
+        if provider_dir.is_dir():
+            # Look for game folders inside provider folder
+            for game_dir in sorted(provider_dir.iterdir()):
+                if game_dir.is_dir():
+                    # Skip special folders like "Provider Logo"
+                    if game_dir.name.lower() not in ['provider logo', 'assets', '.git']:
+                        game_dirs.append(game_dir)
+
+    return game_dirs
 
 
 def get_available_fonts():
@@ -327,6 +356,42 @@ def get_game_assets(game_path):
         })
 
     except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/asset-preview')
+def get_asset_preview():
+    """Serve asset image for preview tooltip."""
+    try:
+        game_path = request.args.get('game', '')
+        asset_path = request.args.get('asset', '')
+
+        if not game_path or not asset_path:
+            return jsonify({'success': False, 'error': 'Missing parameters'}), 400
+
+        # Normalize game path
+        path_parts = game_path.split('/')
+        game_dir = THUMBNAILS_ROOT
+        for part in path_parts:
+            game_dir = game_dir / part
+
+        # Resolve full asset path (normalize path separators)
+        asset_path_normalized = asset_path.replace('/', '\\' if '\\' in str(game_dir) else '/')
+        full_asset_path = game_dir / asset_path_normalized
+
+        print(f"[PREVIEW] Game path: {game_path}", flush=True)
+        print(f"[PREVIEW] Asset path: {asset_path}", flush=True)
+        print(f"[PREVIEW] Full path: {full_asset_path}", flush=True)
+        print(f"[PREVIEW] Exists: {full_asset_path.exists()}", flush=True)
+
+        if not full_asset_path.exists():
+            return jsonify({'success': False, 'error': f'Asset not found: {full_asset_path}'}), 404
+
+        # Serve the image file
+        return send_file(str(full_asset_path), mimetype='image/png')
+
+    except Exception as e:
+        print(f"[PREVIEW ERROR] {e}", flush=True)
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
